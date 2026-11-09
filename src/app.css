@@ -1,0 +1,67 @@
+/* MingDesk board. Colours and type come from the Four Ounces kit (four-ounces-tokens.css), as in MingTab. */
+@import './four-ounces-tokens.css';
+
+/* Bundled OFL fonts (licences in /fonts/licenses), so nothing loads from the network. */
+@font-face { font-family: 'Inter'; src: url('/fonts/Inter.latin.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Archivo Black'; src: url('/fonts/ArchivoBlack-Regular.latin.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('/fonts/JetBrainsMono.latin.woff2') format('woff2'); font-weight: 100 800; font-display: swap; }
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--fo-font-text);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--fo-bg);
+  color: var(--fo-text);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--fo-line); background: var(--fo-surface);
+  border-radius: var(--fo-radius-sm); padding: 6px 12px; }
+button:hover { background: var(--fo-surface-2); }
+button:focus-visible { outline: 2px solid var(--fo-gold); outline-offset: 2px; }
+button.primary { background: var(--fo-gold); color: var(--fo-on-gold); border-color: var(--fo-gold); font-weight: 600; }
+button.primary:hover { filter: brightness(1.06); background: var(--fo-gold); }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+.top { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--fo-line); }
+.top h1 { font-family: var(--fo-font-display); font-weight: 400; font-size: 18px; margin: 0; letter-spacing: 0.01em; }
+.app-icon { border-radius: 7px; }
+
+.body { flex: 1; display: grid; grid-template-columns: 200px 1fr; min-height: 0; }
+.spaces { border-right: 1px solid var(--fo-line); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+.spaces-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fo-muted); padding: 0 8px 6px; }
+.space { text-align: left; border: 0; background: transparent; padding: 6px 8px; }
+.space.active { background: var(--fo-gold-soft); color: var(--fo-text); font-weight: 600; }
+.soon { font-size: 12px; color: var(--fo-muted); padding: 8px; margin: 0; }
+
+.main { padding: 24px; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
+.card { background: var(--fo-surface); border: 1px solid var(--fo-line); border-radius: var(--fo-radius-lg); padding: 20px 24px; }
+.card h2 { margin: 0 0 8px; font-size: 16px; }
+.card p { margin: 0 0 12px; color: var(--fo-text-2); max-width: 64ch; }
+.muted, .card p.muted { color: var(--fo-muted); }
+
+.onboarding { max-width: 720px; }
+.steps { margin: 0 0 20px; padding-left: 22px; color: var(--fo-text-2); display: grid; gap: 6px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.pane { min-height: 160px; }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: var(--fo-radius-pill);
+  background: var(--fo-surface-2); color: var(--fo-muted); }
+.pill.ok { background: var(--fo-gold-soft); color: var(--fo-gold-ink); font-weight: 600; }
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fo-gold); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .pill .dot { animation: none; } }
+
+.banner { border-radius: var(--fo-radius-md); padding: 10px 14px; border: 1px solid var(--fo-line); max-width: 720px; }
+.banner.success { border-color: var(--fo-success); color: var(--fo-success); }
+.banner.danger { border-color: var(--fo-danger); color: var(--fo-danger); }
+
+.foot { display: flex; justify-content: space-between; padding: 8px 20px; border-top: 1px solid var(--fo-line);
+  font-size: 12px; color: var(--fo-muted); }
+.made { display: inline-flex; align-items: center; gap: 6px; }
+
+@media (max-width: 760px) { .body { grid-template-columns: 1fr; } .spaces { display: none; } }

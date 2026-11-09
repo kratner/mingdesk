@@ -3,7 +3,7 @@
 A window manager in the MingTab mould: every app window on your computer on one board, saved into
 collections and spaces, searched, and brought back the way it was. Mac first; Windows and Linux after.
 
-Created 2026-11-08. Nothing built yet.
+Created 2026-11-08. **M0 built 2026-11-08** (see CHANGELOG.md); M1 next.
 
 **Name:** MingDesk, from 明窗淨几 (*míng chuāng jìng jī*), "a bright window and a clean desk": the classical
 picture of a tidy place to work. MingTab keeps the tab bar clear; MingDesk keeps the desk clear. A Four Ounces
@@ -149,12 +149,15 @@ Each milestone ends with tests that ran and what Keith checks by hand, as in Min
 
 ---
 
-## 7. Open questions for Keith
+## 7. Decisions
 
-1. **Apple Developer Program ($99/yr):** sign up before M2, or stay unsigned on your own Mac until it's ready to
-   share?
-2. **Dock icon or menu bar only?** Proposal: menu bar only, the board opens as a normal window.
-3. **Hotkey:** ⌥Space is free on most Macs (Raycast and Alfred often take ⌘Space or ⌥Space; MingDesk will detect
-   a clash and ask).
-4. **One app or two?** Proposal: MingDesk stays a separate app that talks to MingTab, not a merged product. Each
-   stays small; people can use either alone.
+Decided 2026-11-08:
+
+1. **Apple Developer Program ($99/yr): later.** Builds are signed with a free self-signed certificate
+   (`scripts/dev-cert.sh`), which keeps the Accessibility permission across builds on Keith's machines. Enrol
+   before MingDesk is shared with the public (individual = "Keith Ratner"; organisation = "Four Ounces", which
+   needs a D-U-N-S number first).
+2. **Menu bar only**, no Dock icon; the board opens as a normal window. Built in M0.
+3. **Hotkey ⌥Space** by default (M1); MingDesk detects a clash and asks.
+4. **Separate app** that talks to MingTab, not a merged product.
+5. **Licence: MIT**, the same as MingTab. Repo public.
