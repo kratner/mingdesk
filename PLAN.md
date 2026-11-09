@@ -127,7 +127,7 @@ possible differs a lot by platform, and it decides the order of work.
 - **Windows:** an installer from GitHub Releases; code signing optional at first (SmartScreen warns until it's
   signed or has reputation).
 - **Linux:** AppImage / `.deb`.
-- Repo: **kratner/mingdesk** (Keith creates it; this machine's `gh` is the work account).
+- Repo: <https://github.com/kratner/mingdesk> (pushed over SSH; this machine's `gh` is the work account).
 
 ---
 
