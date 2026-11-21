@@ -1,9 +1,11 @@
 //! MingDesk's core: the menu-bar icon, the board window and the commands the board calls.
 
+mod desk;
 mod platform;
 
 use platform::{Permission, Platform};
 use serde::Serialize;
+use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, State, WindowEvent};
@@ -11,6 +13,8 @@ use tauri::{AppHandle, Manager, State, WindowEvent};
 const BOARD: &str = "main";
 
 type PlatformState = Box<dyn Platform>;
+/// Displays seen so far, for ghosts (PLAN.md §9). In memory for now; saved to disk with the live updates.
+type KnownState = Mutex<desk::KnownDisplays>;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +25,11 @@ struct Status {
 }
 
 fn status_of(platform: &dyn Platform) -> Status {
-    Status { permission: platform.permission(), platform: platform.name(), version: env!("CARGO_PKG_VERSION") }
+    Status {
+        permission: platform.permission(),
+        platform: platform.name(),
+        version: env!("CARGO_PKG_VERSION"),
+    }
 }
 
 /// The board's "Allow access" button: have the OS list MingDesk, then open the page where the user ticks it.
@@ -43,6 +51,40 @@ fn allow_access(platform: State<'_, PlatformState>) -> Result<Status, String> {
     allow_access_on(platform.as_ref())
 }
 
+/// The desk as it is now: displays (ghosts included), their windows, and off-screen windows.
+fn desk_of(platform: &dyn Platform, known: &KnownState) -> Result<desk::Desk, String> {
+    if !platform.permission().usable() {
+        return Ok(desk::Desk::default());
+    }
+    let snapshot = platform.snapshot()?;
+    let mut known = known.lock().map_err(|e| e.to_string())?;
+    known.remember(&snapshot.displays);
+    Ok(desk::build(&snapshot, &known))
+}
+
+#[tauri::command]
+fn desk(
+    platform: State<'_, PlatformState>,
+    known: State<'_, KnownState>,
+) -> Result<desk::Desk, String> {
+    desk_of(platform.as_ref(), &known)
+}
+
+/// The switcher's search over the desk as it is now: window ids, best match first.
+#[tauri::command]
+fn search(
+    platform: State<'_, PlatformState>,
+    known: State<'_, KnownState>,
+    query: String,
+) -> Result<Vec<u32>, String> {
+    Ok(desk::search(&desk_of(platform.as_ref(), &known)?, &query))
+}
+
+#[tauri::command]
+fn act(platform: State<'_, PlatformState>, action: desk::Action) -> Result<(), String> {
+    desk::perform(platform.as_ref(), &action)
+}
+
 #[tauri::command]
 fn open_permission_settings(platform: State<'_, PlatformState>) -> Result<(), String> {
     platform.open_permission_settings()
@@ -61,7 +103,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit MingDesk", true, Some("CmdOrCtrl+Q"))?;
     let menu = Menu::with_items(app, &[&open, &PredefinedMenuItem::separator(app)?, &quit])?;
     TrayIconBuilder::with_id("mingdesk")
-        .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?)
+        .icon(tauri::image::Image::from_bytes(include_bytes!(
+            "../icons/tray-template.png"
+        ))?)
         .icon_as_template(true)
         .tooltip("MingDesk")
         .menu(&menu)
@@ -80,7 +124,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage::<PlatformState>(platform::current())
-        .invoke_handler(tauri::generate_handler![status, allow_access, open_permission_settings])
+        .manage::<KnownState>(Mutex::new(desk::KnownDisplays::default()))
+        .invoke_handler(tauri::generate_handler![
+            status,
+            allow_access,
+            open_permission_settings,
+            desk,
+            search,
+            act
+        ])
         .setup(|app| {
             // Menu bar only: no Dock icon, no app menu (PLAN.md §7, decided 2026-11-08).
             #[cfg(target_os = "macos")]
@@ -94,11 +146,11 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             // Closing the board hides it; MingDesk keeps running in the menu bar until Quit.
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == BOARD {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && window.label() == BOARD
+            {
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .run(tauri::generate_context!())
@@ -139,10 +191,34 @@ mod tests {
 
     #[test]
     fn permission_serializes_as_the_board_expects() {
-        assert_eq!(serde_json::to_string(&Permission::NotNeeded).unwrap(), "\"notNeeded\"");
-        let json = serde_json::to_value(status_of(&FakePlatform::new(Permission::Granted))).unwrap();
+        assert_eq!(
+            serde_json::to_string(&Permission::NotNeeded).unwrap(),
+            "\"notNeeded\""
+        );
+        let json =
+            serde_json::to_value(status_of(&FakePlatform::new(Permission::Granted))).unwrap();
         assert_eq!(json["permission"], "granted");
         assert_eq!(json["platform"], "fake");
+    }
+
+    #[test]
+    fn the_desk_is_empty_until_access_is_allowed_and_remembers_displays_after() {
+        use crate::platform::Rect;
+        use platform::fake::display;
+        let p = FakePlatform::with(
+            vec![display("laptop", Rect::new(0.0, 0.0, 1512.0, 982.0), true)],
+            vec![],
+        );
+        let known = KnownState::default();
+        *p.permission.lock().unwrap() = Permission::Missing;
+        assert!(desk_of(&p, &known).unwrap().displays.is_empty());
+        assert!(
+            known.lock().unwrap().displays.is_empty(),
+            "nothing read without access"
+        );
+        *p.permission.lock().unwrap() = Permission::Granted;
+        assert_eq!(desk_of(&p, &known).unwrap().displays.len(), 1);
+        assert_eq!(known.lock().unwrap().displays.len(), 1);
     }
 
     #[test]

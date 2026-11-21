@@ -5,7 +5,9 @@
 //! isn't an app bundle and macOS charges the permission to whatever launched it (VS Code, Terminal), so check the
 //! onboarding with the bundled app (`npm run app`).
 
-use super::{Permission, Platform};
+use super::{Permission, Platform, Snapshot};
+
+const NOT_YET: &str = "Window control on the Mac arrives in the next M1 step.";
 use core_foundation::base::TCFType;
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
@@ -18,7 +20,8 @@ unsafe extern "C" {
     static kAXTrustedCheckOptionPrompt: CFStringRef;
 }
 
-const ACCESSIBILITY_SETTINGS: &str = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+const ACCESSIBILITY_SETTINGS: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
 
 pub struct MacPlatform;
 
@@ -29,7 +32,11 @@ impl Platform for MacPlatform {
 
     fn permission(&self) -> Permission {
         // SAFETY: no arguments; safe to call from any thread.
-        if unsafe { AXIsProcessTrusted() } { Permission::Granted } else { Permission::Missing }
+        if unsafe { AXIsProcessTrusted() } {
+            Permission::Granted
+        } else {
+            Permission::Missing
+        }
     }
 
     fn request_permission(&self) {
@@ -46,6 +53,28 @@ impl Platform for MacPlatform {
             .arg(ACCESSIBILITY_SETTINGS)
             .status()
             .map_err(|e| e.to_string())
-            .and_then(|s| if s.success() { Ok(()) } else { Err(format!("open exited with {s}")) })
+            .and_then(|s| {
+                if s.success() {
+                    Ok(())
+                } else {
+                    Err(format!("open exited with {s}"))
+                }
+            })
+    }
+
+    fn snapshot(&self) -> Result<Snapshot, String> {
+        Ok(Snapshot::default())
+    }
+    fn focus(&self, _window: u32) -> Result<(), String> {
+        Err(NOT_YET.into())
+    }
+    fn minimize(&self, _window: u32) -> Result<(), String> {
+        Err(NOT_YET.into())
+    }
+    fn close(&self, _window: u32) -> Result<(), String> {
+        Err(NOT_YET.into())
+    }
+    fn bring_app_forward(&self, _pid: i32) -> Result<(), String> {
+        Err(NOT_YET.into())
     }
 }
