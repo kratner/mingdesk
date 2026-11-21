@@ -60,7 +60,7 @@ possible differs a lot by platform, and it decides the order of work.
     position, a Terminal's history or an app's internal panels. Apps that restore their own windows on launch
     (most Apple apps) help.
   - **Mission Control Spaces (desktops):** there's no public API to move a window to another desktop or switch
-    desktops. MingDesk records which display a window was on, not which desktop. Workarounds (simulated
+    desktops. Reading which desktops exist and which window is on which uses private calls (§7.12). MingDesk records which display a window was on, not which desktop. Workarounds (simulated
     keystrokes) are fragile; left out unless asked.
   - **Full-screen windows** live on their own desktop and can be listed but not placed.
   - **Not in the Mac App Store:** the store's sandbox forbids controlling other apps' windows. Distribution is a
@@ -178,6 +178,12 @@ Decided 2026-11-21:
     only a missing display of the current setup is a ghost (§9).
 11. **Restoring a setup's windows asks first** (M3): on redocking, MingDesk offers to put the windows back
     rather than doing it by itself.
+12. **Private macOS calls for desktops and windows on them**, with public calls as the fallback: the window
+    number of an Accessibility window (`_AXUIElementGetWindow`), the desktops and full-screen spaces of each
+    display and which window is on which (`CGSCopyManagedDisplaySpaces`, `CGSCopySpacesForWindows`), and
+    reaching windows on other desktops (`_AXUIElementCreateWithRemoteToken`, as AltTab does). Without them,
+    full-screen windows on another desktop (Keith's RustDesk sessions) show only their app's name and can't be
+    focused one by one. If a macOS update breaks one, MingDesk falls back to what the public calls see.
 
 ## 8. The desk: List and Desk views
 

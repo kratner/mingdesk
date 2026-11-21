@@ -101,10 +101,27 @@ pub struct WindowInfo {
     pub full_screen: bool,
     /// False for a window on another Mission Control desktop: listed, but MingDesk can't move it (PLAN.md §8).
     pub on_current_desktop: bool,
+    /// The desktop (Mission Control space) it's on, when the OS says (PLAN.md §7.12).
+    pub desktop: Option<u64>,
     /// The window that has keyboard focus, if it's this one.
     pub focused: bool,
     /// Stacking order, 0 = front-most. Minimized windows have no place in it and come after every visible one.
     pub order: u32,
+}
+
+/// A desktop in Mission Control: an ordinary one ("Desktop 2") or a window's full-screen space.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Desktop {
+    pub id: u64,
+    /// The display it belongs to (`Display::id`).
+    pub display: String,
+    /// Its place on that display, left to right in Mission Control, from 1.
+    pub index: u32,
+    /// A full-screen window's space rather than an ordinary desktop.
+    pub full_screen: bool,
+    /// The one showing on its display now.
+    pub current: bool,
 }
 
 /// Everything the OS reports at one moment.
@@ -112,6 +129,8 @@ pub struct WindowInfo {
 pub struct Snapshot {
     pub displays: Vec<Display>,
     pub windows: Vec<WindowInfo>,
+    /// Empty when the OS won't say (the private calls failed, or another OS).
+    pub desktops: Vec<Desktop>,
 }
 
 pub trait Platform: Send + Sync {
@@ -173,7 +192,11 @@ pub mod fake {
 
         pub fn with(displays: Vec<Display>, windows: Vec<WindowInfo>) -> Self {
             let p = Self::new(Permission::Granted);
-            *p.snapshot.lock().unwrap() = Snapshot { displays, windows };
+            *p.snapshot.lock().unwrap() = Snapshot {
+                displays,
+                windows,
+                desktops: Vec::new(),
+            };
             p
         }
 
@@ -215,6 +238,7 @@ pub mod fake {
             minimized: false,
             full_screen: false,
             on_current_desktop: true,
+            desktop: None,
             focused: false,
             order,
         }

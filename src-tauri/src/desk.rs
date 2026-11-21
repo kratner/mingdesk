@@ -1,7 +1,7 @@
 //! The desk: what the board's List and Desk views show (PLAN.md §8, §9). Built from a platform snapshot plus the
 //! displays MingDesk remembers, with no OS calls of its own, so all of it is tested over the fake platform.
 
-use crate::platform::{Display, Platform, Rect, Snapshot, WindowInfo};
+use crate::platform::{Desktop, Display, Platform, Rect, Snapshot, WindowInfo};
 use serde::{Deserialize, Serialize};
 
 /// Space left between the real displays and a ghost moved out of their way on the Desk view, in points.
@@ -20,6 +20,8 @@ pub struct DeskDisplay {
     pub connected: bool,
     /// Stacking order, front-most first; minimized windows last.
     pub windows: Vec<WindowInfo>,
+    /// Its desktops and full-screen spaces, in Mission Control's order; empty when the OS won't say.
+    pub desktops: Vec<Desktop>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize)]
@@ -221,6 +223,12 @@ pub fn build(snapshot: &Snapshot, known: &Known) -> Desk {
             main: d.main,
             connected: true,
             windows: Vec::new(),
+            desktops: snapshot
+                .desktops
+                .iter()
+                .filter(|x| x.display == d.id)
+                .cloned()
+                .collect(),
         })
         .collect();
 
@@ -265,6 +273,7 @@ pub fn build(snapshot: &Snapshot, known: &Known) -> Desk {
             main: false,
             connected: false,
             windows: Vec::new(),
+            desktops: Vec::new(),
         });
     }
 
@@ -374,7 +383,11 @@ mod tests {
     }
 
     fn snap(displays: Vec<Display>, windows: Vec<WindowInfo>) -> Snapshot {
-        Snapshot { displays, windows }
+        Snapshot {
+            displays,
+            windows,
+            desktops: Vec::new(),
+        }
     }
 
     fn ids(d: &DeskDisplay) -> Vec<u32> {
