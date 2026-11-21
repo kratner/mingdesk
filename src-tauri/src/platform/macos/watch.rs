@@ -225,8 +225,8 @@ fn observe(resync: Receiver<()>) {
         }
         // A launch, quit or desktop switch asks for a sync; every RESYNC_EVERY one happens anyway, in case a
         // notification was missed.
-        ticks += 1;
-        sync = resync.try_iter().count() > 0 || ticks % RESYNC_EVERY == 0;
+        ticks = ticks.wrapping_add(1);
+        sync = resync.try_iter().count() > 0 || ticks.is_multiple_of(RESYNC_EVERY);
     }
 }
 
