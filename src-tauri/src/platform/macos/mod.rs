@@ -15,8 +15,9 @@ mod cf;
 mod cg;
 mod ffi;
 mod spaces;
+mod watch;
 
-use super::{Desktop, Permission, Platform, Snapshot, WindowInfo};
+use super::{Desktop, Permission, Platform, Sink, Snapshot, WindowInfo};
 use ax::Element;
 use core_foundation::base::TCFType;
 use core_foundation::boolean::CFBoolean;
@@ -290,6 +291,10 @@ impl Platform for MacPlatform {
     fn bring_app_forward(&self, pid: i32) -> Result<(), String> {
         appkit::activate(pid, true)
     }
+
+    fn watch(&self, sink: Sink) {
+        watch::start(sink);
+    }
 }
 
 #[cfg(test)]
@@ -391,5 +396,101 @@ mod probe {
                 w.frame
             );
         }
+    }
+
+    /// Watches TextEdit windows this test opens itself, minimizes, focuses and closes them, and reports what
+    /// the watcher heard at each step. Touches no other window. Needs Accessibility for VS Code or Terminal:
+    /// `cargo test watch_hears_its_own_textedit_windows -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn watch_hears_its_own_textedit_windows() {
+        use crate::platform::Change;
+        use std::sync::{Arc, Mutex};
+        use std::thread::sleep;
+
+        let dir = std::env::temp_dir().join(format!("mingdesk-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let open = |name: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, "MingDesk probe: safe to close.\n").unwrap();
+            std::process::Command::new("open")
+                .args(["-a", "TextEdit"])
+                .arg(&path)
+                .status()
+                .unwrap();
+        };
+        let find = |title: &str| {
+            read(Sources::ALL)
+                .0
+                .windows
+                .into_iter()
+                .find(|w| w.app == "TextEdit" && w.title == title)
+        };
+        let wait_for = |title: &str, present: bool| {
+            for _ in 0..40 {
+                if find(title).is_some() == present {
+                    return;
+                }
+                sleep(Duration::from_millis(250));
+            }
+            panic!("{title} never became present={present}");
+        };
+
+        // Close anything an earlier run of this probe left open (its own files only).
+        for w in read(Sources::ALL).0.windows {
+            if w.app == "TextEdit" && (w.title == "mingdesk-a.txt" || w.title == "mingdesk-b.txt") {
+                let _ = MacPlatform.close(w.id);
+            }
+        }
+        wait_for("mingdesk-a.txt", false);
+        wait_for("mingdesk-b.txt", false);
+
+        open("mingdesk-a.txt");
+        wait_for("mingdesk-a.txt", true);
+        let heard = Arc::new(Mutex::new(Vec::<(Instant, Change)>::new()));
+        let log = heard.clone();
+        MacPlatform.watch(Arc::new(move |c| {
+            log.lock().unwrap().push((Instant::now(), c))
+        }));
+        sleep(Duration::from_secs(1));
+
+        let mac = MacPlatform;
+        let step = |label: &str, act: &dyn Fn()| {
+            heard.lock().unwrap().clear();
+            let at = Instant::now();
+            act();
+            sleep(Duration::from_millis(1500));
+            let events = heard.lock().unwrap();
+            let first = events.first().map(|(t, _)| t.duration_since(at));
+            println!(
+                "{label:<26} {} events, first after {:?}",
+                events.len(),
+                first
+            );
+            events.len()
+        };
+        let a = find("mingdesk-a.txt").unwrap().id;
+        let minimized = step("minimize a", &|| mac.minimize(a).unwrap());
+        assert!(find("mingdesk-a.txt").unwrap().minimized);
+        let focused = step("focus a (restores it)", &|| mac.focus(a).unwrap());
+        let a_now = find("mingdesk-a.txt").unwrap();
+        assert!(!a_now.minimized, "restored: {a_now:?}");
+        // Bringing another app forward is up to macOS: it lets the app the user is in hand over focus, and the
+        // test process is never that app. Reported, not required; the board and switcher are checked by hand.
+        println!("{:<26} focused={}", "  after focus", a_now.focused);
+        let created = step("open b", &|| open("mingdesk-b.txt"));
+        wait_for("mingdesk-b.txt", true);
+        let b = find("mingdesk-b.txt").unwrap().id;
+        let closed = step("close a and b", &|| {
+            mac.close(a).unwrap();
+            mac.close(b).unwrap();
+        });
+        wait_for("mingdesk-a.txt", false);
+        wait_for("mingdesk-b.txt", false);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(
+            minimized > 0 && focused > 0 && created > 0 && closed > 0,
+            "every step was heard"
+        );
     }
 }

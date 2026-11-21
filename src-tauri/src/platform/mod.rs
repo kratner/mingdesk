@@ -7,6 +7,7 @@
 //! converts anything else at its edge.
 
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -133,6 +134,19 @@ pub struct Snapshot {
     pub desktops: Vec<Desktop>,
 }
 
+/// What changed, as a platform reports it to MingDesk's live refresh (live.rs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change {
+    /// A window opened, closed, moved, resized, was retitled, minimized or focused; an app launched, quit, hid
+    /// or came forward; or the desktop changed. Worth a refresh while the board or switcher is showing.
+    Windows,
+    /// A display was added, removed or rearranged: always worth a refresh, to keep setups current.
+    Displays,
+}
+
+/// Where a platform sends changes. Called from any thread, often in bursts.
+pub type Sink = Arc<dyn Fn(Change) + Send + Sync>;
+
 pub trait Platform: Send + Sync {
     /// Short name of the OS, shown in the board's footer.
     fn name(&self) -> &'static str;
@@ -151,6 +165,10 @@ pub trait Platform: Send + Sync {
     fn close(&self, window: u32) -> Result<(), String>;
     /// Activates the app with all of its windows in front.
     fn bring_app_forward(&self, pid: i32) -> Result<(), String>;
+
+    /// Starts telling `sink` about changes, for as long as MingDesk runs. Platforms that can't watch leave it
+    /// to the refresh's timer.
+    fn watch(&self, _sink: Sink) {}
 }
 
 pub fn current() -> Box<dyn Platform> {
@@ -177,6 +195,10 @@ pub mod fake {
         pub snapshot: Mutex<Snapshot>,
         /// Every action, as "focus 12", "close 7", "forward 501".
         pub actions: Mutex<Vec<String>>,
+        /// How many snapshots MingDesk has taken.
+        pub snapshots_taken: Mutex<u32>,
+        /// The sink MingDesk passed to `watch`, so a test can report changes.
+        pub sink: Mutex<Option<Sink>>,
     }
 
     impl FakePlatform {
@@ -187,6 +209,8 @@ pub mod fake {
                 settings_opened: Mutex::new(0),
                 snapshot: Mutex::new(Snapshot::default()),
                 actions: Mutex::new(Vec::new()),
+                snapshots_taken: Mutex::new(0),
+                sink: Mutex::new(None),
             }
         }
 
@@ -259,7 +283,11 @@ pub mod fake {
             Ok(())
         }
         fn snapshot(&self) -> Result<Snapshot, String> {
+            *self.snapshots_taken.lock().unwrap() += 1;
             Ok(self.snapshot.lock().unwrap().clone())
+        }
+        fn watch(&self, sink: Sink) {
+            *self.sink.lock().unwrap() = Some(sink);
         }
         fn focus(&self, window: u32) -> Result<(), String> {
             self.record("focus", window.into())

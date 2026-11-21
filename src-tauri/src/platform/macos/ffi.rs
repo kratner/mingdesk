@@ -10,12 +10,23 @@ use std::ffi::c_void;
 
 pub type CFTypeRef = *const c_void;
 pub type AXUIElementRef = *const c_void;
+pub type AXObserverRef = *const c_void;
+pub type AXObserverCallback = extern "C" fn(
+    observer: AXObserverRef,
+    element: AXUIElementRef,
+    notification: CFStringRef,
+    refcon: *mut c_void,
+);
+pub type CGDisplayReconfigurationCallBack =
+    extern "C" fn(display: CGDirectDisplayID, flags: u32, user: *mut c_void);
 pub type AXError = i32;
 pub type CGWindowID = u32;
 pub type CGDirectDisplayID = u32;
 pub type CGSConnectionID = i32;
 
 pub const kAXErrorSuccess: AXError = 0;
+/// First call of a display change, before anything has moved.
+pub const kCGDisplayBeginConfigurationFlag: u32 = 1 << 0;
 pub const kAXValueCGPointType: u32 = 1;
 pub const kAXValueCGSizeType: u32 = 2;
 
@@ -64,6 +75,18 @@ unsafe extern "C" {
     pub fn AXUIElementPerformAction(element: AXUIElementRef, action: CFStringRef) -> AXError;
     pub fn AXUIElementSetMessagingTimeout(element: AXUIElementRef, seconds: f32) -> AXError;
     pub fn AXValueGetValue(value: CFTypeRef, kind: u32, out: *mut c_void) -> bool;
+    pub fn AXObserverCreate(
+        pid: i32,
+        callback: AXObserverCallback,
+        observer: *mut AXObserverRef,
+    ) -> AXError;
+    pub fn AXObserverAddNotification(
+        observer: AXObserverRef,
+        element: AXUIElementRef,
+        notification: CFStringRef,
+        refcon: *mut c_void,
+    ) -> AXError;
+    pub fn AXObserverGetRunLoopSource(observer: AXObserverRef) -> CFTypeRef;
 
     /// Private: the CGWindowID behind an Accessibility window.
     pub fn _AXUIElementGetWindow(element: AXUIElementRef, out: *mut CGWindowID) -> AXError;
@@ -84,6 +107,10 @@ unsafe extern "C" {
     pub fn CGDisplayIsMain(display: CGDirectDisplayID) -> u32;
     /// The display this one mirrors, or 0 if it mirrors none.
     pub fn CGDisplayMirrorsDisplay(display: CGDirectDisplayID) -> CGDirectDisplayID;
+    pub fn CGDisplayRegisterReconfigurationCallback(
+        callback: CGDisplayReconfigurationCallBack,
+        user: *mut c_void,
+    ) -> i32;
 
     /// Private (SkyLight, re-exported by CoreGraphics): this process's window-server connection.
     pub fn CGSMainConnectionID() -> CGSConnectionID;

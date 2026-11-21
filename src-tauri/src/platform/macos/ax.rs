@@ -29,6 +29,10 @@ impl Element {
         self.0.as_CFTypeRef()
     }
 
+    pub fn as_ptr(&self) -> AXUIElementRef {
+        self.ptr()
+    }
+
     pub fn app(pid: i32) -> Self {
         // SAFETY: create rule, never null for a pid.
         let app = unsafe { Self::own(AXUIElementCreateApplication(pid)) };

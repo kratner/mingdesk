@@ -1,20 +1,28 @@
 //! MingDesk's core: the menu-bar icon, the board window and the commands the board calls.
 
 mod desk;
+mod live;
 mod platform;
 
-use platform::{Permission, Platform};
+use platform::{Change, Permission, Platform};
 use serde::Serialize;
-use std::sync::Mutex;
+use std::path::PathBuf;
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
 const BOARD: &str = "main";
 
 type PlatformState = Box<dyn Platform>;
-/// Displays and setups seen so far (PLAN.md §9). In memory for now; saved to disk with the live updates.
+/// Displays and setups seen so far (PLAN.md §9), saved to known.json in MingDesk's settings folder.
 type KnownState = Mutex<desk::Known>;
+/// Nudges the refresh thread, e.g. when the board is shown.
+type NudgeState = Mutex<Option<Sender<Change>>>;
+
+/// The event the board listens to for a changed desk.
+const DESK_EVENT: &str = "desk";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +104,76 @@ fn show_board(app: &AppHandle) {
         let _ = board.show();
         let _ = board.set_focus();
     }
+    // Windows may have changed while it was hidden.
+    if let Some(tx) = app.state::<NudgeState>().lock().unwrap().as_ref() {
+        let _ = tx.send(Change::Windows);
+    }
+}
+
+fn known_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("known.json"))
+}
+
+fn showing(app: &AppHandle) -> bool {
+    app.get_webview_window(BOARD)
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
+}
+
+/// The refresh thread (live.rs has the rules): waits for a change or the backstop timer, lets a burst settle,
+/// then takes a snapshot if one is wanted, saves remembered displays and tells the board.
+fn start_live(app: &AppHandle) {
+    let (tx, rx) = mpsc::channel::<Change>();
+    let sink_tx = Mutex::new(tx.clone());
+    app.state::<PlatformState>().watch(Arc::new(move |change| {
+        let _ = sink_tx.lock().unwrap().send(change);
+    }));
+    *app.state::<NudgeState>().lock().unwrap() = Some(tx);
+    let app = app.clone();
+    std::thread::Builder::new()
+        .name("mingdesk-live".into())
+        .spawn(move || {
+            let mut state = live::Live::default();
+            loop {
+                let mut tick = live::Tick::default();
+                let mut note = |c: Change| match c {
+                    Change::Windows => tick.windows = true,
+                    Change::Displays => tick.displays = true,
+                };
+                match rx.recv_timeout(live::POLL) {
+                    Ok(first) => {
+                        note(first);
+                        std::thread::sleep(live::SETTLE);
+                        rx.try_iter().for_each(&mut note);
+                    }
+                    Err(RecvTimeoutError::Timeout) => tick.timer = true,
+                    Err(RecvTimeoutError::Disconnected) => return,
+                }
+                tick.showing = showing(&app);
+                let platform = app.state::<PlatformState>();
+                let known_state = app.state::<KnownState>();
+                let mut known = known_state.lock().unwrap();
+                match state.step(tick, platform.as_ref(), &mut known) {
+                    Ok(step) => {
+                        if step.save_known
+                            && let Some(path) = known_path(&app)
+                            && let Err(e) = live::save(&path, &known)
+                        {
+                            eprintln!("MingDesk: couldn't save known displays: {e}");
+                        }
+                        drop(known);
+                        if let Some(desk) = step.emit {
+                            let _ = app.emit(DESK_EVENT, desk);
+                        }
+                    }
+                    Err(e) => eprintln!("MingDesk: refresh failed: {e}"),
+                }
+            }
+        })
+        .expect("start the refresh thread");
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -125,6 +203,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage::<PlatformState>(platform::current())
         .manage::<KnownState>(Mutex::new(desk::Known::default()))
+        .manage::<NudgeState>(Mutex::new(None))
         .invoke_handler(tauri::generate_handler![
             status,
             allow_access,
@@ -138,6 +217,10 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             build_tray(app.handle())?;
+            if let Some(path) = known_path(app.handle()) {
+                *app.state::<KnownState>().lock().unwrap() = live::load(&path);
+            }
+            start_live(app.handle());
             // The board opens by itself only while there's something to do in it: allowing access.
             if !app.state::<PlatformState>().permission().usable() {
                 show_board(app.handle());
