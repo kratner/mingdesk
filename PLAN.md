@@ -141,7 +141,7 @@ Each milestone ends with tests that ran and what Keith checks by hand, as in Min
 | **M0** | **Skeleton.** Tauri app, menu-bar icon, empty board, Four Ounces icon. Accessibility onboarding: detects the permission, opens the right Settings pane, notices when it's granted. | Builds and runs on the Mac; onboarding round-trip checked by hand. |
 | **M1** | **See your desk.** The List and Desk views (§8), live: every display (ghosts of disconnected ones too, §9), every window in stacking order, minimized and off-screen windows. Click to focus; minimize, close, bring all of an app's windows forward. Quick switcher on the global hotkey with search. Seeing only: nothing is dragged yet. | Rust tests over a fake platform (including several display arrangements); on the real Mac, a script opens TextEdit/Preview/Finder windows and checks MingDesk lists, focuses and closes them and notices a new window. |
 | **M2** | **Arrange your desk.** In the List, drag a window to another display or to a new place in the stacking order; on the Desk view, move and resize windows, bring one to the front, zoom in on a display. | Placement and scaling math unit-tested per display arrangement; on the real Mac, a script moves and resizes a TextEdit window (frame ±2 px), moves it to another display when one is attached, and reorders the stack (checked against the OS's window order). By hand: dragging in both views. |
-| **M3** | **Save and restore.** Save a window, an app's windows, a selection, or the whole desk as a collection. Open a collection: launch apps, reopen documents, place windows; report anything that couldn't come back. Cope with a changed monitor setup, and reapply a layout per display setup (docked vs. laptop only). Queued moves to a disconnected display may land here. | Restore test: save a scripted set of documents in TextEdit, Preview and Finder, quit them, open the collection, compare frames (±2 px) and documents. Two-display and one-display restores by hand. |
+| **M3** | **Save and restore.** Save a window, an app's windows, a selection, or the whole desk as a collection. Open a collection: launch apps, reopen documents, place windows; report anything that couldn't come back. Cope with a changed monitor setup. Remember where windows were in each display setup (§9) and, when a setup comes back (redocking), ask before putting them back (§7.11). Queued moves to a disconnected display may land here. | Restore test: save a scripted set of documents in TextEdit, Preview and Finder, quit them, open the collection, compare frames (±2 px) and documents. Two-display and one-display restores by hand. |
 | **M4** | **Organise.** Spaces, drag and drop, tags, stars, notes, Next, Stats, select mode, undo, backup/restore to a file. Mostly MingTab's board, ported. | Unit tests on the model; UI tests in the webview (Playwright against the dev server, as MingTab does). |
 | **M5** | **Tabs.** MingTab bridge (native messaging: list a browser window's tabs, save them with the window, hand restores to MingTab); Safari, Finder and Terminal tabs through AppleScript; VS Code workspaces. | Bridge protocol unit-tested on both sides; restore of a browser window with its tabs by hand. |
 | **M6** | **Windows.** The `windows` platform implementation, tray icon, installer. | The M1–M3 scripted tests, ported to Notepad/Explorer windows. |
@@ -171,6 +171,13 @@ Decided 2026-11-20:
 8. **Ghost displays:** disconnected displays MingDesk has seen are drawn as ghosts; queuing a move onto one until
    it comes back is left for later (§9).
 9. **Stacking order by raising in sequence:** try it and see how the flicker feels (§8).
+
+Decided 2026-11-21:
+
+10. **Setups instead of plain ghosts:** MingDesk remembers each set of displays as a setup (Home, Office);
+    only a missing display of the current setup is a ghost (§9).
+11. **Restoring a setup's windows asks first** (M3): on redocking, MingDesk offers to put the windows back
+    rather than doing it by itself.
 
 ## 8. The desk: List and Desk views
 
@@ -205,12 +212,21 @@ change in one appears in the other at once.
   also keep their position relative to their display, so a restore can map them onto another arrangement.
 - **Which display a window is on:** the one it overlaps most. A window on no display goes to Off-screen.
   Mirrored displays count as one.
-- **Ghosts:** MingDesk remembers every display it has seen (virtual ones too: Sidecar, AirPlay, DisplayLink,
-  dummy displays) and draws disconnected ones as ghosts in free space on the Desk view. Queued moves onto a ghost
-  are for later, probably M3.
+- **Setups** (decided 2026-11-21, §7.10): MingDesk remembers each set of displays connected together as a
+  setup, e.g. Keith's "Home" (MacBook Air with the lid open plus two externals on the dock) and "Office" (lid
+  closed, one very wide monitor). The board says which setup is current and lists the others by name; their
+  displays are not drawn. Setups get a name from their displays until the user renames them, and can be forgotten.
+- **Ghosts:** only displays of the *current* setup that aren't connected (a monitor that didn't wake, the lid
+  closed at home), drawn in free space on the Desk view if their old place is taken. A connected set that is
+  part of a known setup counts as that setup with displays missing, until the user says **This is a setup of
+  its own**. Queued moves onto a ghost are for later, probably M3.
 - **"Displays have separate Spaces":** read from the system; whether a window is on the current desktop is worked
   out per display when it's on.
 - **Order:** main display first, then left to right as arranged. Headers show the name, resolution and "main".
 - **Changes:** displays are re-read whenever one is added, removed or rearranged; windows macOS moves are picked
   up by the live refresh.
-- **Switcher:** opens on the display the mouse is on (not yet confirmed).
+- **Switcher and board:** open on the display the pointer is on (Keith uses a Magic Trackpad), by default;
+  revisit after trying it in M1.
+- **Designing for:** a very wide display (Desk view fits by width; zoom on one display), no built-in display
+  at all (lid closed), the main display anywhere in the arrangement, and a trackpad first on the Desk view
+  (pinch to zoom, two-finger pan, generous resize handles).

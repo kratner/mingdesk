@@ -16,7 +16,7 @@ pub struct DeskDisplay {
     /// Where the Desk view draws it: the real frame, or for a ghost a free spot if its old frame is now taken.
     pub frame: Rect,
     pub main: bool,
-    /// False for a ghost: a display MingDesk has seen that isn't connected now.
+    /// False for a ghost: a display of the current setup that isn't connected now.
     pub connected: bool,
     /// Stacking order, front-most first; minimized windows last.
     pub windows: Vec<WindowInfo>,
@@ -31,6 +31,10 @@ pub struct Desk {
     pub offscreen: Vec<WindowInfo>,
     /// Everything the Desk view has to fit: every display drawn, ghosts included.
     pub bounds: Rect,
+    /// The setup these displays belong to; None before MingDesk has seen any.
+    pub setup: Option<SetupSummary>,
+    /// Every other setup MingDesk knows, listed under its name rather than drawn.
+    pub other_setups: Vec<SetupSummary>,
 }
 
 impl Desk {
@@ -42,15 +46,47 @@ impl Desk {
     }
 }
 
-/// Every display MingDesk has seen, so a disconnected one can be drawn as a ghost (PLAN.md §9).
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct KnownDisplays {
-    /// In the order first seen; a display seen again keeps its place and takes its latest name and frame.
-    pub displays: Vec<Display>,
+/// A display setup: the set of displays connected together, e.g. "Home" (laptop + two externals on the dock)
+/// and "Office" (lid closed, one wide monitor). PLAN.md §9.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Setup {
+    /// The display ids, sorted and joined: the same set always gets the same id.
+    pub id: String,
+    /// The display names joined with " + " until the user renames it.
+    pub name: String,
+    /// Sorted display ids.
+    pub displays: Vec<String>,
 }
 
-impl KnownDisplays {
-    /// Records the connected displays. Returns true when something changed (worth saving).
+/// The current setup, or another one, as the board lists it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupSummary {
+    pub id: String,
+    pub name: String,
+    pub display_names: Vec<String>,
+}
+
+/// Every display and setup MingDesk has seen (PLAN.md §9).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Known {
+    /// In the order first seen; a display seen again keeps its place and takes its latest name and frame.
+    pub displays: Vec<Display>,
+    pub setups: Vec<Setup>,
+}
+
+fn set_of(connected: &[Display]) -> Vec<String> {
+    let mut ids: Vec<String> = connected.iter().map(|d| d.id.clone()).collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+impl Known {
+    /// Records the connected displays, and their set as a setup unless it is part of a known setup with some
+    /// displays missing (a monitor that didn't wake, the lid closed at home): those show as ghosts instead,
+    /// until the user says it's a setup of its own (`adopt`). Returns true when something changed.
     pub fn remember(&mut self, connected: &[Display]) -> bool {
         let mut changed = false;
         for d in connected {
@@ -66,16 +102,80 @@ impl KnownDisplays {
                 }
             }
         }
+        let set = set_of(connected);
+        let known = self.setups.iter().any(|s| s.displays == set);
+        let part_of_one = self
+            .setups
+            .iter()
+            .any(|s| is_proper_subset(&set, &s.displays));
+        if !set.is_empty() && !known && !part_of_one {
+            self.add_setup(set);
+            changed = true;
+        }
         changed
     }
 
-    /// Forgets a ghost the user no longer wants drawn.
-    #[allow(dead_code)] // wired to the board's "Forget" on a ghost in the UI step
-    pub fn forget(&mut self, id: &str) -> bool {
-        let before = self.displays.len();
-        self.displays.retain(|d| d.id != id);
-        self.displays.len() != before
+    /// "This is a setup of its own": records the connected set even though it's part of a bigger one.
+    #[allow(dead_code)] // wired to the board's button in the UI step
+    pub fn adopt(&mut self, connected: &[Display]) -> bool {
+        let set = set_of(connected);
+        if set.is_empty() || self.setups.iter().any(|s| s.displays == set) {
+            return false;
+        }
+        self.add_setup(set);
+        true
     }
+
+    /// "Forget this setup": drops it, and any display no other setup uses.
+    #[allow(dead_code)] // wired to the board's button in the UI step
+    pub fn forget_setup(&mut self, id: &str) -> bool {
+        let before = self.setups.len();
+        self.setups.retain(|s| s.id != id);
+        let setups = &self.setups;
+        self.displays
+            .retain(|d| setups.iter().any(|s| s.displays.contains(&d.id)));
+        self.setups.len() != before
+    }
+
+    fn add_setup(&mut self, set: Vec<String>) {
+        let names: Vec<String> = set.iter().map(|id| self.name_of(id)).collect();
+        self.setups.push(Setup {
+            id: set.join(","),
+            name: names.join(" + "),
+            displays: set,
+        });
+    }
+
+    fn name_of(&self, id: &str) -> String {
+        self.displays
+            .iter()
+            .find(|d| d.id == id)
+            .map_or_else(|| id.to_string(), |d| d.name.clone())
+    }
+
+    /// The setup the connected displays belong to: the exact one, or else the smallest known setup that holds
+    /// them all (whose other displays are then missing).
+    pub fn current(&self, connected: &[Display]) -> Option<&Setup> {
+        let set = set_of(connected);
+        self.setups.iter().find(|s| s.displays == set).or_else(|| {
+            self.setups
+                .iter()
+                .filter(|s| is_proper_subset(&set, &s.displays))
+                .min_by_key(|s| s.displays.len())
+        })
+    }
+
+    fn summary(&self, setup: &Setup) -> SetupSummary {
+        SetupSummary {
+            id: setup.id.clone(),
+            name: setup.name.clone(),
+            display_names: setup.displays.iter().map(|id| self.name_of(id)).collect(),
+        }
+    }
+}
+
+fn is_proper_subset(small: &[String], big: &[String]) -> bool {
+    !small.is_empty() && small.len() < big.len() && small.iter().all(|id| big.contains(id))
 }
 
 /// The display a window belongs to: the one it overlaps most (PLAN.md §9). None if it's on no display.
@@ -107,8 +207,8 @@ fn stacking_order(a: &WindowInfo, b: &WindowInfo) -> std::cmp::Ordering {
         .then(a.id.cmp(&b.id))
 }
 
-/// Builds the desk the board shows from one snapshot and the displays MingDesk remembers.
-pub fn build(snapshot: &Snapshot, known: &KnownDisplays) -> Desk {
+/// Builds the desk the board shows from one snapshot and the displays and setups MingDesk remembers.
+pub fn build(snapshot: &Snapshot, known: &Known) -> Desk {
     let mut connected = snapshot.displays.clone();
     connected.sort_by(display_order);
 
@@ -142,11 +242,15 @@ pub fn build(snapshot: &Snapshot, known: &KnownDisplays) -> Desk {
     offscreen.sort_by(stacking_order);
 
     let mut bounds = displays.iter().map(|d| d.frame).reduce(|a, b| a.union(&b));
-    for ghost in known
-        .displays
-        .iter()
-        .filter(|k| !connected.iter().any(|c| c.id == k.id))
-    {
+    let current = known.current(&connected);
+    let missing = current.map_or(Vec::new(), |setup| {
+        known
+            .displays
+            .iter()
+            .filter(|k| setup.displays.contains(&k.id) && !connected.iter().any(|c| c.id == k.id))
+            .collect()
+    });
+    for ghost in missing {
         let mut frame = ghost.frame;
         if displays.iter().any(|d| d.frame.overlap(&frame) > 0.0) {
             // Its old place is taken (by a display connected now, or another ghost): draw it to the right.
@@ -168,6 +272,13 @@ pub fn build(snapshot: &Snapshot, known: &KnownDisplays) -> Desk {
         displays,
         offscreen,
         bounds: bounds.unwrap_or_default(),
+        setup: current.map(|c| known.summary(c)),
+        other_setups: known
+            .setups
+            .iter()
+            .filter(|s| current.is_none_or(|c| c.id != s.id))
+            .map(|s| known.summary(s))
+            .collect(),
     }
 }
 
@@ -272,7 +383,7 @@ mod tests {
 
     #[test]
     fn displays_come_main_first_then_left_to_right() {
-        let desk = build(&snap(three(), vec![]), &KnownDisplays::default());
+        let desk = build(&snap(three(), vec![]), &Known::default());
         let order: Vec<&str> = desk.displays.iter().map(|d| d.id.as_str()).collect();
         assert_eq!(order, ["laptop", "left", "above"]);
         assert!(desk.displays.iter().all(|d| d.connected));
@@ -320,7 +431,7 @@ mod tests {
                 4,
             ),
         ];
-        let desk = build(&snap(three(), windows), &KnownDisplays::default());
+        let desk = build(&snap(three(), windows), &Known::default());
         assert_eq!(ids(&desk.displays[0]), [1, 4], "laptop");
         assert_eq!(ids(&desk.displays[1]), [2, 3], "left");
         assert_eq!(ids(&desk.displays[2]), [5], "above");
@@ -336,7 +447,7 @@ mod tests {
             Rect::new(5000.0, 5000.0, 400.0, 300.0),
             0,
         );
-        let desk = build(&snap(three(), vec![lost]), &KnownDisplays::default());
+        let desk = build(&snap(three(), vec![lost]), &Known::default());
         assert_eq!(desk.offscreen.iter().map(|w| w.id).collect::<Vec<_>>(), [9]);
         assert!(desk.displays.iter().all(|d| d.windows.is_empty()));
     }
@@ -358,14 +469,14 @@ mod tests {
         ];
         let desk = build(
             &snap(vec![display("laptop", LAPTOP, true)], windows),
-            &KnownDisplays::default(),
+            &Known::default(),
         );
         assert_eq!(ids(&desk.displays[0]), [4, 2, 3, 1]);
     }
 
     #[test]
     fn a_remembered_display_that_is_unplugged_becomes_a_ghost() {
-        let mut known = KnownDisplays::default();
+        let mut known = Known::default();
         assert!(known.remember(&three()));
         assert!(!known.remember(&three()), "nothing new the second time");
 
@@ -390,41 +501,125 @@ mod tests {
 
     #[test]
     fn a_ghost_whose_place_is_taken_is_drawn_beside_the_desk() {
-        let mut known = KnownDisplays::default();
+        // At home the external is main; when it doesn't wake, the laptop becomes main and takes the origin.
+        let ext = display("ext", Rect::new(0.0, 0.0, 2560.0, 1440.0), true);
+        let mut known = Known::default();
         known.remember(&[
-            display("laptop", LAPTOP, true),
-            display("old", Rect::new(1512.0, 0.0, 1920.0, 1080.0), false),
+            ext,
+            display("laptop", Rect::new(2560.0, 458.0, 1512.0, 982.0), false),
         ]);
-        // A different monitor now sits where the old one was.
-        let now = vec![
-            display("laptop", LAPTOP, true),
-            display("new", Rect::new(1512.0, 0.0, 2560.0, 1440.0), false),
-        ];
-        let desk = build(&snap(now, vec![]), &known);
-        let ghost = desk.displays.iter().find(|d| d.id == "old").unwrap();
+        let desk = build(&snap(vec![display("laptop", LAPTOP, true)], vec![]), &known);
+        let ghost = desk.displays.iter().find(|d| d.id == "ext").unwrap();
+        assert!(!ghost.connected);
         assert_eq!(
             ghost.frame,
-            Rect::new(1512.0 + 2560.0 + GHOST_GAP, 0.0, 1920.0, 1080.0)
+            Rect::new(1512.0 + GHOST_GAP, 0.0, 2560.0, 1440.0)
         );
-        assert!(
-            desk.displays
-                .iter()
-                .filter(|d| d.id != "old")
-                .all(|d| d.frame.overlap(&ghost.frame) == 0.0)
-        );
+        assert_eq!(desk.displays[0].frame.overlap(&ghost.frame), 0.0);
         assert_eq!(desk.bounds.right(), ghost.frame.right());
     }
 
+    // The office: lid closed, so no built-in display, and one very wide monitor.
+    fn office() -> Vec<Display> {
+        vec![display("wide", Rect::new(0.0, 0.0, 5120.0, 1440.0), true)]
+    }
+
     #[test]
-    fn remembering_a_moved_display_updates_it_and_forget_drops_it() {
-        let mut known = KnownDisplays::default();
+    fn home_and_office_are_separate_setups_with_no_ghosts() {
+        let mut known = Known::default();
+        known.remember(&three());
+        assert!(known.remember(&office()), "a new setup");
+        assert_eq!(known.setups.len(), 2);
+
+        let at_office = build(&snap(office(), vec![]), &known);
+        assert_eq!(
+            at_office.displays.len(),
+            1,
+            "home's displays aren't drawn as ghosts"
+        );
+        assert_eq!(at_office.setup.as_ref().unwrap().name, "Display wide");
+        assert_eq!(at_office.other_setups.len(), 1);
+        assert_eq!(
+            at_office.other_setups[0].display_names,
+            ["Display above", "Display laptop", "Display left"]
+        );
+
+        let at_home = build(&snap(three(), vec![]), &known);
+        assert!(at_home.displays.iter().all(|d| d.connected));
+        assert_eq!(at_home.other_setups[0].name, "Display wide");
+    }
+
+    #[test]
+    fn lid_closed_at_home_shows_the_laptop_as_a_ghost_until_adopted() {
+        let mut known = Known::default();
+        known.remember(&three());
+        let lid_closed = vec![display("left", LEFT, false), display("above", ABOVE, false)];
+        assert!(
+            !known.remember(&lid_closed),
+            "part of Home, so not a setup of its own"
+        );
+
+        let desk = build(&snap(lid_closed.clone(), vec![]), &known);
+        let ghosts: Vec<&str> = desk
+            .displays
+            .iter()
+            .filter(|d| !d.connected)
+            .map(|d| d.id.as_str())
+            .collect();
+        assert_eq!(ghosts, ["laptop"]);
+        assert_eq!(
+            desk.setup.as_ref().unwrap().display_names.len(),
+            3,
+            "still the Home setup"
+        );
+
+        assert!(known.adopt(&lid_closed));
+        assert!(!known.adopt(&lid_closed));
+        let desk = build(&snap(lid_closed, vec![]), &known);
+        assert!(desk.displays.iter().all(|d| d.connected));
+        assert_eq!(desk.other_setups.len(), 1, "Home is now another setup");
+    }
+
+    #[test]
+    fn missing_displays_count_against_the_smallest_setup_that_holds_the_rest() {
+        let mut known = Known::default();
+        let pair = vec![
+            display("laptop", LAPTOP, true),
+            display("left", LEFT, false),
+        ];
+        known.remember(&three());
+        known.adopt(&pair);
+        // Only the laptop: both setups hold it; the pair is the closer one, so only "left" is a ghost.
+        let desk = build(&snap(vec![display("laptop", LAPTOP, true)], vec![]), &known);
+        let ghosts: Vec<&str> = desk
+            .displays
+            .iter()
+            .filter(|d| !d.connected)
+            .map(|d| d.id.as_str())
+            .collect();
+        assert_eq!(ghosts, ["left"]);
+    }
+
+    #[test]
+    fn remembering_a_moved_display_updates_it_and_forgetting_a_setup_drops_its_displays() {
+        let mut known = Known::default();
         known.remember(&three());
         let moved = display("left", Rect::new(-1920.0, 0.0, 1920.0, 1080.0), false);
         assert!(known.remember(std::slice::from_ref(&moved)));
         assert_eq!(known.displays.iter().find(|d| d.id == "left"), Some(&moved));
         assert_eq!(known.displays.len(), 3);
-        assert!(known.forget("left"));
-        assert!(!known.forget("left"));
+        known.remember(&office());
+        assert!(known.forget_setup("above,laptop,left"));
+        assert!(!known.forget_setup("above,laptop,left"));
+        assert_eq!(known.setups.len(), 1);
+        assert_eq!(
+            known
+                .displays
+                .iter()
+                .map(|d| d.id.as_str())
+                .collect::<Vec<_>>(),
+            ["wide"]
+        );
     }
 
     fn search_desk() -> Desk {
@@ -440,7 +635,7 @@ mod tests {
         ];
         build(
             &snap(vec![display("laptop", LAPTOP, true)], windows),
-            &KnownDisplays::default(),
+            &Known::default(),
         )
     }
 

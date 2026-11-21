@@ -13,8 +13,8 @@ use tauri::{AppHandle, Manager, State, WindowEvent};
 const BOARD: &str = "main";
 
 type PlatformState = Box<dyn Platform>;
-/// Displays seen so far, for ghosts (PLAN.md §9). In memory for now; saved to disk with the live updates.
-type KnownState = Mutex<desk::KnownDisplays>;
+/// Displays and setups seen so far (PLAN.md §9). In memory for now; saved to disk with the live updates.
+type KnownState = Mutex<desk::Known>;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -124,7 +124,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage::<PlatformState>(platform::current())
-        .manage::<KnownState>(Mutex::new(desk::KnownDisplays::default()))
+        .manage::<KnownState>(Mutex::new(desk::Known::default()))
         .invoke_handler(tauri::generate_handler![
             status,
             allow_access,
