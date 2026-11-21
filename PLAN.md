@@ -3,7 +3,8 @@
 A window manager in the MingTab mould: every app window on your computer on one board, saved into
 collections and spaces, searched, and brought back the way it was. Mac first; Windows and Linux after.
 
-Created 2026-11-08. **M0 built 2026-11-08** (see CHANGELOG.md); M1 next.
+Created 2026-11-08. **M0 built 2026-11-08** (see CHANGELOG.md); M1 next. **Revised 2026-11-20:** the board's
+two views, List and Desk (§8), how MingDesk handles several displays (§9), and arranging moved up to M2 (§6).
 
 **Name:** MingDesk, from 明窗淨几 (*míng chuāng jìng jī*), "a bright window and a clean desk": the classical
 picture of a tidy place to work. MingTab keeps the tab bar clear; MingDesk keeps the desk clear. A Four Ounces
@@ -18,7 +19,7 @@ of any app, and keeps tabs as a level beneath them where an app has tabs.
 
 | MingTab | MingDesk |
 |---|---|
-| Open tabs pane (every window and tab group) | **Open windows pane**: every window, grouped by app and by display |
+| Open tabs pane (every window and tab group) | **The desk**: every window on every display, as a **List** (one section per display, drag between them and reorder) or as the **Desk** view (a scaled picture of all the screens; move and resize windows on it). §8 |
 | Card = a saved tab (URL, title, note) | Card = a saved **window** (app, title, document or folder, size and place, display, tabs if any) |
 | Collection = saved tabs, e.g. a tab group | Collection = a **working set** of windows, e.g. "Quarterly report": Excel file, two Finder folders, a browser window, a Terminal |
 | Save window / Save all | **Save these windows** / **Save desk** (everything open, on every display) |
@@ -29,7 +30,7 @@ of any app, and keeps tabs as a level beneath them where an app has tabs.
 **Where it stands among existing Mac tools.** Window tools on the Mac mostly do one of three things: arrange
 (Rectangle, Moom, Magnet), switch (AltTab, Witch, Raycast), or restore a fixed layout (Stay, Workspaces).
 MingDesk's difference is MingTab's: a **library** of saved working sets you organise, search and reopen,
-alongside a live view of what's open. Arranging comes later (M4) and stays simple.
+alongside a live view of what's open that you can rearrange by dragging (M2).
 
 **Tabs as a subset.** Browsers, Finder, Terminal, VS Code and others have tabs. MingDesk shows tabs where the app
 tells it about them (section 3), and for Chromium browsers it borrows them from MingTab rather than
@@ -101,7 +102,7 @@ possible differs a lot by platform, and it decides the order of work.
 
 - **Tauri 2:** a small native app whose screens are a web page.
   - **UI:** React + TypeScript, styled with the Four Ounces tokens, laid out like MingTab's board (spaces, the
-    collections grid, the open-windows pane). The look and the habits carry over.
+    collections grid, the desk in its List and Desk views). The look and the habits carry over.
   - **Core:** Rust. A `Platform` trait (`list_windows`, `focus`, `place`, `minimize`, `close`, `launch`,
     `open_document`, `watch` for changes) with one implementation per OS: `macos` first (Accessibility through
     the `objc2` and `core-foundation` crates), then `windows` (the `windows` crate), then `linux`.
@@ -138,14 +139,14 @@ Each milestone ends with tests that ran and what Keith checks by hand, as in Min
 | | Milestone | Done when |
 |---|---|---|
 | **M0** | **Skeleton.** Tauri app, menu-bar icon, empty board, Four Ounces icon. Accessibility onboarding: detects the permission, opens the right Settings pane, notices when it's granted. | Builds and runs on the Mac; onboarding round-trip checked by hand. |
-| **M1** | **See your desk.** Open-windows pane: every window grouped by app and display, kept live. Click to focus; minimize, close, bring all of an app's windows forward. Quick switcher on the global hotkey with search. | Rust tests over a fake platform; on the real Mac, a script opens TextEdit/Preview/Finder windows and checks MingDesk lists, focuses and closes them. |
-| **M2** | **Save and restore.** Save a window, an app's windows, a selection, or the whole desk as a collection. Open a collection: launch apps, reopen documents, place windows; report anything that couldn't come back. Cope with a changed monitor setup. | Restore test: save a scripted set of documents in TextEdit, Preview and Finder, quit them, open the collection, compare frames (±2 px) and documents. Two-display and one-display restores by hand. |
-| **M3** | **Organise.** Spaces, drag and drop, tags, stars, notes, Next, Stats, select mode, undo, backup/restore to a file. Mostly MingTab's board, ported. | Unit tests on the model; UI tests in the webview (Playwright against the dev server, as MingTab does). |
-| **M4** | **Arrange.** Snap the focused window to halves, thirds and quarters from the hotkey; save and reapply a layout per display setup (docked vs. laptop only). Kept modest: Rectangle does this well. | Frame math unit-tested per display layout; by hand on the laptop alone and docked. |
+| **M1** | **See your desk.** The List and Desk views (§8), live: every display (ghosts of disconnected ones too, §9), every window in stacking order, minimized and off-screen windows. Click to focus; minimize, close, bring all of an app's windows forward. Quick switcher on the global hotkey with search. Seeing only: nothing is dragged yet. | Rust tests over a fake platform (including several display arrangements); on the real Mac, a script opens TextEdit/Preview/Finder windows and checks MingDesk lists, focuses and closes them and notices a new window. |
+| **M2** | **Arrange your desk.** In the List, drag a window to another display or to a new place in the stacking order; on the Desk view, move and resize windows, bring one to the front, zoom in on a display. | Placement and scaling math unit-tested per display arrangement; on the real Mac, a script moves and resizes a TextEdit window (frame ±2 px), moves it to another display when one is attached, and reorders the stack (checked against the OS's window order). By hand: dragging in both views. |
+| **M3** | **Save and restore.** Save a window, an app's windows, a selection, or the whole desk as a collection. Open a collection: launch apps, reopen documents, place windows; report anything that couldn't come back. Cope with a changed monitor setup, and reapply a layout per display setup (docked vs. laptop only). Queued moves to a disconnected display may land here. | Restore test: save a scripted set of documents in TextEdit, Preview and Finder, quit them, open the collection, compare frames (±2 px) and documents. Two-display and one-display restores by hand. |
+| **M4** | **Organise.** Spaces, drag and drop, tags, stars, notes, Next, Stats, select mode, undo, backup/restore to a file. Mostly MingTab's board, ported. | Unit tests on the model; UI tests in the webview (Playwright against the dev server, as MingTab does). |
 | **M5** | **Tabs.** MingTab bridge (native messaging: list a browser window's tabs, save them with the window, hand restores to MingTab); Safari, Finder and Terminal tabs through AppleScript; VS Code workspaces. | Bridge protocol unit-tested on both sides; restore of a browser window with its tabs by hand. |
-| **M6** | **Windows.** The `windows` platform implementation, tray icon, installer. | The M1/M2 scripted tests, ported to Notepad/Explorer windows. |
+| **M6** | **Windows.** The `windows` platform implementation, tray icon, installer. | The M1–M3 scripted tests, ported to Notepad/Explorer windows. |
 | **M7** | **Linux.** X11 first; then KDE, GNOME, sway or Hyprland as asked. | Same tests on an X11 session. |
-| later | Sync (MingTab's Cloudflare Worker gains a MingDesk table set), window thumbnails (Screen Recording permission), per-app restore helpers. | |
+| later | Sync (MingTab's Cloudflare Worker gains a MingDesk table set), window thumbnails (Screen Recording permission), per-app restore helpers, snapping the focused window to halves/thirds/quarters from the hotkey (kept modest: Rectangle does this well). | |
 
 ---
 
@@ -161,3 +162,55 @@ Decided 2026-11-08:
 3. **Hotkey ⌥Space** by default (M1); MingDesk detects a clash and asks.
 4. **Separate app** that talks to MingTab, not a merged product.
 5. **Licence: MIT**, the same as MingTab. Repo public.
+
+Decided 2026-11-20:
+
+6. **M1 sees, M2 arranges.** Moving windows comes straight after seeing them; save and restore becomes M3 and
+   Organise M4 (§6).
+7. **Two views: List and Desk.** "Desk" because it shows the whole desk: every window on every screen (§8).
+8. **Ghost displays:** disconnected displays MingDesk has seen are drawn as ghosts; queuing a move onto one until
+   it comes back is left for later (§9).
+9. **Stacking order by raising in sequence:** try it and see how the flicker feels (§8).
+
+## 8. The desk: List and Desk views
+
+The board shows one live desk in two views, switched with a toggle (and a key). Both show the same data, so a
+change in one appears in the other at once.
+
+- **List** (the default; behaves like MingTab's list, whose drag handles, drop indicators and keyboard it copies):
+  one section per display, its windows as rows in stacking order, front-most on top. Minimized windows sit at the
+  end of their display's section, and windows macOS left off-screen in an **Off-screen** section. "By app" is a
+  grouping toggle and filter over the same rows. Click a row to focus; minimize and close on hover; an app's
+  header brings all its windows forward.
+  - M2: drag a row to another display's section to move the window there (same place relative to the screen,
+    scaled, shrunk if it doesn't fit); drag within a section to change the stacking order.
+- **Desk**: every display drawn in its real arrangement, scaled so the whole set fits the board and rescaled when
+  the board is resized, ghosts included. Windows are rectangles with app icon and title, drawn in stacking order;
+  minimized windows in a strip under their display. No thumbnails (they need Screen Recording; later, optional).
+  - M2: drag to move (onto another display too), edge handles to resize, click to bring to the front, zoom in on
+    one display to fine-tune. Drag a minimized window out of the strip to restore and place it.
+- **What can't be moved**, shown as such: full-screen windows (drawn filling their display, locked), windows on
+  another Mission Control desktop (dimmed; listed, not movable), and windows whose app refuses a size or place
+  (MingDesk reads back where the window actually landed).
+- **Stacking order:** macOS reports it but offers no "put this behind that". Bringing one window to the front is
+  exact. Any other reorder raises windows one by one from the new bottom to the new top, which flickers briefly
+  and can change the active app. Decided to try it (§7.9).
+
+## 9. Several displays
+
+- **Identity:** each display is known by its UUID (`CGDisplayCreateUUIDFromDisplayID`), which survives unplugging
+  and waking, unlike the display number. Fallback for monitors that share a UUID: name + resolution + position.
+- **Coordinates:** one system throughout, CoreGraphics' global points (origin top-left of the main display, which
+  is also what Accessibility uses); AppKit's bottom-left `NSScreen` frames are converted at the edge. Saved frames
+  also keep their position relative to their display, so a restore can map them onto another arrangement.
+- **Which display a window is on:** the one it overlaps most. A window on no display goes to Off-screen.
+  Mirrored displays count as one.
+- **Ghosts:** MingDesk remembers every display it has seen (virtual ones too: Sidecar, AirPlay, DisplayLink,
+  dummy displays) and draws disconnected ones as ghosts in free space on the Desk view. Queued moves onto a ghost
+  are for later, probably M3.
+- **"Displays have separate Spaces":** read from the system; whether a window is on the current desktop is worked
+  out per display when it's on.
+- **Order:** main display first, then left to right as arranged. Headers show the name, resolution and "main".
+- **Changes:** displays are re-read whenever one is added, removed or rearranged; windows macOS moves are picked
+  up by the live refresh.
+- **Switcher:** opens on the display the mouse is on (not yet confirmed).
