@@ -7,7 +7,24 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <!-- Shown until the board starts. If the board's script can't run (an old WebKit, say), the window says so
+         instead of staying blank. Kept to ES5 so it runs anywhere. -->
+    <div id="root"><p id="boot" style="font: 13px -apple-system, sans-serif; color: #999; padding: 24px">Starting MingDesk…</p></div>
+    <script>
+      (function () {
+        var shown = false;
+        function show(text) {
+          var boot = document.getElementById('boot');
+          if (!boot || shown) return;
+          shown = true;
+          boot.textContent = "MingDesk's board couldn't start on this Mac: " + text +
+            ". Updating Safari may fix it. (Safari " + (navigator.userAgent.match(/Version\/([\d.]+)/) || [, '?'])[1] + ')';
+        }
+        window.addEventListener('error', function (e) { show(e.message || 'a script error'); });
+        window.addEventListener('unhandledrejection', function (e) { show(String(e.reason)); });
+        setTimeout(function () { show('it timed out'); }, 8000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

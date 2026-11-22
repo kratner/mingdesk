@@ -14,14 +14,16 @@ function mockState(): Desk {
   if (!mock) mock = mockDesk(new URLSearchParams(window.location.search).get('mock'));
   return mock;
 }
+// structuredClone needs Safari 15.4; the mock desk is plain JSON anyway.
+const copy = (d: Desk): Desk => JSON.parse(JSON.stringify(d));
 function mockChanged() {
-  const d = structuredClone(mockState());
+  const d = copy(mockState());
   mockListeners.forEach((f) => f(d));
 }
 
 export async function getDesk(): Promise<Desk> {
   if (inTauri) return invoke<Desk>('desk');
-  return structuredClone(mockState());
+  return copy(mockState());
 }
 
 /** Calls `onChange` with every new desk the core reports. Returns a function that stops listening. */

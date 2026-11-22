@@ -1,6 +1,6 @@
 [package]
 name = "mingdesk"
-version = "0.2.1"
+version = "0.2.2"
 description = "Every app window on one board: save, organise and restore them."
 authors = ["Keith Ratner <keith@fourounces.live>"]
 license = "MIT"

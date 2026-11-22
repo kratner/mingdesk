@@ -231,7 +231,14 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    // ResizeObserver needs Safari 13.1; older WebKit (a Mojave Mac on Safari 12) follows the window instead.
+    if (typeof ResizeObserver === 'undefined') {
+      measure();
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);

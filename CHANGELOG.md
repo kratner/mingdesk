@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 (2026-11-22): M1 preview
+
+- **Runs on macOS Mojave again.** On a Mojave Mac with its original Safari (12), the board's window stayed
+  black: the board was built for Safari 14 and Safari 12 couldn't read it. It's now built for Safari 12, and
+  the two newer browser features it used (watching the canvas size, copying the sample desk) have fallbacks.
+- If the board ever can't start, its window now says why instead of staying blank.
+
 ## 0.2.1 (2026-11-22): M1 preview
 
 The first download. (0.2.0 was tagged but never published: the release workflow's final check failed

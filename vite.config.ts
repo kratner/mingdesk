@@ -7,8 +7,10 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react()],
-  // The board runs in the system's WebKit: Safari 14 on macOS Mojave (10.14), the oldest MingDesk supports.
-  build: { target: ["es2020", "safari14"] },
+  // The board runs in the system's WebKit, which is whatever Safari the Mac has: Safari 12 on a Mojave (10.14)
+  // Mac that never updated Safari. Safari 12 can't parse `?.` or `??`, and one syntax error leaves the window
+  // black, so build down to it.
+  build: { target: ["es2017", "safari12"], cssTarget: ["safari12"] },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
