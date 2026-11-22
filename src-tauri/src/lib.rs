@@ -176,6 +176,9 @@ fn open_permission_settings(platform: State<'_, PlatformState>) -> Result<(), St
 }
 
 fn show_board(app: &AppHandle) {
+    // Closing the board hides the app too; bring the app back before its window.
+    #[cfg(target_os = "macos")]
+    let _ = app.show();
     if let Some(board) = app.get_webview_window(BOARD) {
         let unmin = board.unminimize();
         let shown = board.show();
@@ -271,7 +274,10 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "open" => show_board(app),
+            "open" => {
+                log::event("menu-bar icon: Open MingDesk");
+                show_board(app);
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -324,7 +330,12 @@ pub fn run() {
             {
                 api.prevent_close();
                 let _ = window.hide();
-                log::event("board closed (hidden)");
+                // Also step back from being the active app, as ⌘H does: you land in the app you were using, and
+                // ⌘-Tab to MingDesk is then a real switch, which opens the board (Keith's check 2026-11-22: with
+                // MingDesk left active and windowless, ⌘-Tab to it did nothing).
+                #[cfg(target_os = "macos")]
+                let _ = window.app_handle().hide();
+                log::event("board closed (board hidden, app hidden)");
             }
         })
         // About, Hide, Quit (⌘Q), Edit (copy and paste in the board's fields), Window. Settings… joins with the
