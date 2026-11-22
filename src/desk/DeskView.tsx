@@ -5,7 +5,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { AppBadge } from './ListView';
 import { desktopNames, resolution, windowLabel } from './format';
-import type { Action, Desk, DeskDisplay, Rect } from './types';
+import type { Action, Desk, DeskDisplay, Rect, WindowInfo } from './types';
 
 const PAD = 24;
 /** Room above each display for its name. */
@@ -18,13 +18,148 @@ interface View {
   y: number;
 }
 const FIT: View = { zoom: 1, x: 0, y: 0 };
+/** Up to this many of a kind show as chips on the display; more collapse to one count chip with a list. */
+const TRAY_SINGLES = 2;
+/** Past this many entries the tray list gets a filter box. */
+const LIST_FILTER_FROM = 8;
+
+type TrayKind = 'away' | 'behind' | 'min';
+interface TrayItem {
+  key: string;
+  label: string;
+  app: string | null;
+  title: string;
+  /** The window to focus; null for an empty desktop. */
+  window: number | null;
+}
+interface TrayGroup {
+  kind: TrayKind;
+  noun: string;
+  items: TrayItem[];
+}
+
+/** A display's hidden windows (or other desktops, or minimized windows) as a scrollable list. */
+function TrayList({
+  group,
+  title,
+  onPeek,
+  onPick,
+}: {
+  group: TrayGroup;
+  title: string;
+  onPeek: (id: number | null) => void;
+  onPick: (id: number) => void;
+}) {
+  const [filter, setFilter] = useState('');
+  const f = filter.trim().toLowerCase();
+  const items = group.items.filter((it) => !f || it.label.toLowerCase().includes(f));
+  return (
+    <>
+      <div className="tray-list-head">{title}</div>
+      {group.items.length > LIST_FILTER_FROM && (
+        <input
+          className="filter"
+          type="search"
+          autoFocus
+          placeholder="Filter"
+          aria-label="Filter this list"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      )}
+      <ul className="tray-list-rows" onMouseLeave={() => onPeek(null)}>
+        {items.map((it) => (
+          <li key={it.key}>
+            <button
+              type="button"
+              disabled={it.window === null}
+              title={it.title}
+              onMouseEnter={() => onPeek(it.window)}
+              onFocus={() => onPeek(it.window)}
+              onClick={() => it.window !== null && onPick(it.window)}
+            >
+              {it.app && <AppBadge app={it.app} />}
+              <span className="tray-list-label">{it.app ? it.label.slice(it.label.indexOf(':') + 2) : it.label}</span>
+            </button>
+          </li>
+        ))}
+        {items.length === 0 && <li className="muted empty">No match.</li>}
+      </ul>
+    </>
+  );
+}
 
 export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [view, setView] = useState<View>(FIT);
-  // A covered window whose "behind" chip is hovered: drawn as an outline where it sits.
+  // A covered window whose "behind" chip or list entry is hovered: drawn as an outline where it sits.
   const [peek, setPeek] = useState<number | null>(null);
+  // The tray list open, if any: one display's other desktops, hidden windows or minimized windows.
+  const [open, setOpen] = useState<{ display: string; kind: TrayKind } | null>(null);
+
+  function trayFor(d: DeskDisplay): TrayGroup[] {
+    const byApp = (a: WindowInfo, b: WindowInfo) => a.app.localeCompare(b.app) || windowLabel(a).localeCompare(windowLabel(b), undefined, { numeric: true });
+    const groups: TrayGroup[] = [
+      {
+        kind: 'away',
+        noun: 'other desktops',
+        items: d.desktops
+          .filter((x) => !x.current)
+          .map((x) => {
+            const first = d.windows.find((w) => w.desktop === x.id && !w.minimized);
+            return {
+              key: `x${x.id}`,
+              label: `${x.fullScreen ? '⛶' : '▭'} ${names.get(x.id)}`,
+              app: null,
+              title: first ? `Go to ${names.get(x.id)}` : 'macOS gives no way to switch to an empty desktop',
+              window: first?.id ?? null,
+            };
+          }),
+      },
+      {
+        kind: 'behind',
+        noun: 'behind',
+        items: d.covered
+          .map((id) => d.windows.find((w) => w.id === id))
+          .filter((w): w is WindowInfo => w !== undefined)
+          .sort(byApp)
+          .map((w) => ({
+            key: `w${w.id}`,
+            label: `◫ ${w.app}: ${windowLabel(w)}`,
+            app: w.app,
+            title: `Behind other windows: ${windowLabel(w)}. Click to bring it forward.`,
+            window: w.id,
+          })),
+      },
+      {
+        kind: 'min',
+        noun: 'minimized',
+        items: d.windows
+          .filter((w) => w.minimized)
+          .sort(byApp)
+          .map((w) => ({ key: `w${w.id}`, label: `▁ ${w.app}: ${windowLabel(w)}`, app: w.app, title: `Restore ${windowLabel(w)}`, window: w.id })),
+      },
+    ];
+    return groups.filter((g) => g.items.length > 0);
+  }
+
+  // Esc or a click outside closes the tray list.
+  const popRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(null);
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Element;
+      if (!popRef.current?.contains(t) && !t.closest('.count-chip')) setOpen(null);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [open]);
   const names = desktopNames(desk);
 
   useEffect(() => {
@@ -105,10 +240,7 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
           const drawn = d.windows
             .filter((w) => w.onCurrentDesktop && !w.minimized)
             .sort((a, b2) => b2.order - a.order); // back to front
-          const away = d.desktops.filter((x) => !x.current);
-          const minimized = d.windows.filter((w) => w.minimized);
-          const behind = d.covered.map((id) => d.windows.find((w) => w.id === id)).filter((w) => w !== undefined);
-          const peeking = behind.find((w) => w.id === peek);
+          const peeking = d.windows.find((w) => w.id === peek && d.covered.includes(w.id));
           return (
             <Fragment key={d.id}>
             <div className="screen-label" style={{ ...labelAt(d.frame) }} onDoubleClick={() => zoomTo(d)}>
@@ -160,49 +292,70 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
                   aria-hidden="true"
                 />
               )}
-              {(away.length > 0 || minimized.length > 0 || behind.length > 0) && (
+              {trayFor(d).length > 0 && (
                 <div className="screen-tray">
-                  {away.map((x) => {
-                    const first = d.windows.find((w) => w.desktop === x.id && !w.minimized);
-                    return (
+                  {trayFor(d).map((g) =>
+                    g.items.length <= TRAY_SINGLES ? (
+                      g.items.map((it) => (
+                        <button
+                          key={it.key}
+                          type="button"
+                          className={`chip ${g.kind}`}
+                          disabled={it.window === null}
+                          onClick={() => it.window !== null && onAct({ kind: 'focus', window: it.window })}
+                          onMouseEnter={() => g.kind === 'behind' && setPeek(it.window)}
+                          onMouseLeave={() => setPeek(null)}
+                          onFocus={() => g.kind === 'behind' && setPeek(it.window)}
+                          onBlur={() => setPeek(null)}
+                          title={it.title}
+                        >
+                          {it.label}
+                        </button>
+                      ))
+                    ) : (
                       <button
-                        key={x.id}
+                        key={g.kind}
                         type="button"
-                        className={`chip${x.fullScreen ? ' fs' : ''}`}
-                        disabled={!first}
-                        onClick={() => first && onAct({ kind: 'focus', window: first.id })}
-                        title={first ? `Go to ${names.get(x.id)}` : 'Empty desktop'}
+                        className={`chip ${g.kind} count-chip`}
+                        aria-expanded={open?.display === d.id && open.kind === g.kind}
+                        onClick={() =>
+                          setOpen((o) => (o?.display === d.id && o.kind === g.kind ? null : { display: d.id, kind: g.kind }))
+                        }
                       >
-                        {names.get(x.id)}
+                        {g.items.length} {g.noun}
                       </button>
-                    );
-                  })}
-                  {behind.map((w) => (
-                    <button
-                      key={w.id}
-                      type="button"
-                      className="chip behind"
-                      onClick={() => onAct({ kind: 'focus', window: w.id })}
-                      onMouseEnter={() => setPeek(w.id)}
-                      onMouseLeave={() => setPeek(null)}
-                      onFocus={() => setPeek(w.id)}
-                      onBlur={() => setPeek(null)}
-                      title={`Behind other windows: ${windowLabel(w)} — click to bring it forward`}
-                    >
-                      {w.app}: {windowLabel(w)}
-                    </button>
-                  ))}
-                  {minimized.map((w) => (
-                    <button key={w.id} type="button" className="chip min" onClick={() => onAct({ kind: 'focus', window: w.id })} title={`Restore ${windowLabel(w)}`}>
-                      ▁ {windowLabel(w)}
-                    </button>
-                  ))}
+                    ),
+                  )}
                 </div>
               )}
             </div>
             </Fragment>
           );
         })}
+        {open &&
+          (() => {
+            const d = desk.displays.find((x) => x.id === open.display);
+            const g = d && trayFor(d).find((x) => x.kind === open.kind);
+            if (!d || !g) return null;
+            const p = place(d.frame);
+            const width = Math.min(340, size.w - 16);
+            const left = Math.max(8, Math.min((p.left as number) + 4, size.w - width - 8));
+            const top = Math.max(8, Math.min((p.top as number) + 24, size.h - 220));
+            return (
+              <div ref={popRef} className="tray-list" style={{ left, top, width, maxHeight: size.h - top - 8 }} role="dialog" aria-label={`${d.name}: ${g.items.length} ${g.noun}`}>
+                <TrayList
+                  group={g}
+                  title={`${d.name} · ${g.items.length} ${g.noun}`}
+                  onPeek={(id) => g.kind === 'behind' && setPeek(id)}
+                  onPick={(id) => {
+                    setOpen(null);
+                    setPeek(null);
+                    onAct({ kind: 'focus', window: id });
+                  }}
+                />
+              </div>
+            );
+          })()}
       </div>
       {desk.offscreen.length > 0 && (
         <div className="offscreen-note">

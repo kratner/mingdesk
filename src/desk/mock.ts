@@ -149,7 +149,20 @@ function office(): Desk {
   };
 }
 
+/** Many windows hidden behind a full-size one, as on a busy desk. */
+function crowded(): Desk {
+  const desk = home();
+  const middle = desk.displays[1];
+  for (let i = 0; i < 22; i++) {
+    const w = win('Google Chrome', i === 21 ? 'Release notes' : `New Tab ${i + 1}`, { x: 2200 + i * 10, y: 80 + i * 8, w: 1400, h: 900 }, { desktop: 59, order: 1000 + i });
+    middle.windows.push(w);
+    middle.covered.push(w.id);
+  }
+  return desk;
+}
+
 export function mockDesk(kind: string | null): Desk {
+  if (kind === 'crowded') return crowded();
   if (kind === 'ghost') return ghost();
   if (kind === 'office') return office();
   return home();
