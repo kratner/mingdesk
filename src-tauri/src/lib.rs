@@ -2,6 +2,8 @@
 
 mod desk;
 mod live;
+#[cfg(target_os = "macos")]
+mod mac_app;
 mod platform;
 
 use platform::{Change, Permission, Platform};
@@ -290,22 +292,23 @@ pub fn run() {
             forget_setup
         ])
         .setup(|app| {
-            // Menu bar only: no Dock icon, no app menu (PLAN.md §7, decided 2026-11-08).
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            // A Dock app with the standard menus; the menu-bar icon stays too (PLAN.md §7.13, 2026-11-22).
             build_tray(app.handle())?;
+            #[cfg(target_os = "macos")]
+            {
+                let handle = app.handle().clone();
+                mac_app::on_activate(move || show_board(&handle));
+            }
             if let Some(path) = known_path(app.handle()) {
                 *app.state::<KnownState>().lock().unwrap() = live::load(&path);
             }
             start_live(app.handle());
-            // The board opens by itself only while there's something to do in it: allowing access.
-            if !app.state::<PlatformState>().permission().usable() {
-                show_board(app.handle());
-            }
+            // Launching MingDesk opens the board, as any Mac app opens its window.
+            show_board(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Closing the board hides it; MingDesk keeps running in the menu bar until Quit.
+            // Closing the board hides it; MingDesk keeps running (Dock, menu bar) until Quit.
             if let WindowEvent::CloseRequested { api, .. } = event
                 && window.label() == BOARD
             {
@@ -313,8 +316,17 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running MingDesk");
+        // About, Hide, Quit (⌘Q), Edit (copy and paste in the board's fields), Window. Settings… joins with the
+        // hotkey setting (M1 step 5).
+        .menu(tauri::menu::Menu::default)
+        .build(tauri::generate_context!())
+        .expect("error while starting MingDesk")
+        .run(|app, event| {
+            // A click on the Dock icon shows the board, whether or not it was open.
+            if let tauri::RunEvent::Reopen { .. } = event {
+                show_board(app);
+            }
+        });
 }
 
 #[cfg(test)]

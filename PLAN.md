@@ -158,7 +158,8 @@ Decided 2026-11-08:
    (`scripts/dev-cert.sh`), which keeps the Accessibility permission across builds on Keith's machines. Enrol
    before MingDesk is shared with the public (individual = "Keith Ratner"; organisation = "Four Ounces", which
    needs a D-U-N-S number first).
-2. **Menu bar only**, no Dock icon; the board opens as a normal window. Built in M0.
+2. ~~**Menu bar only**, no Dock icon; the board opens as a normal window. Built in M0.~~ Replaced by §7.13 on
+   2026-11-22.
 3. **Hotkey ⌥Space** by default (M1); MingDesk detects a clash and asks.
 4. **Separate app** that talks to MingTab, not a merged product.
 5. **Licence: MIT**, the same as MingTab. Repo public.
@@ -184,6 +185,17 @@ Decided 2026-11-21:
     reaching windows on other desktops (`_AXUIElementCreateWithRemoteToken`, as AltTab does). Without them,
     full-screen windows on another desktop (Keith's RustDesk sessions) show only their app's name and can't be
     focused one by one. If a macOS update breaks one, MingDesk falls back to what the public calls see.
+
+Decided 2026-11-22 (after Keith's hand check of the board):
+
+13. **A Dock app.** MingDesk has a Dock icon and is in ⌘-Tab all the time (macOS shows or hides both together);
+    clicking the Dock icon or ⌘-Tabbing to MingDesk opens the board, so switching to it never lands on nothing.
+    It has the standard menus while in front (About, Hide, Quit ⌘Q, Edit, Window); **Settings…** (⌘,) comes with
+    the first setting, the switcher's hotkey. The menu-bar icon stays. Closing the board hides it.
+14. **MingDesk's own board is listed** in the List and Desk views while it's open; close on it hides it.
+15. **Design prototypes for the suite** go in the four-ounces-brand repo: three directions, each shown on
+    MingDesk, MingTab and Agent Sessions, so the suite gets a look of its own that stays quiet next to other
+    apps. A separate piece of work from M1.
 
 ## 8. The desk: List and Desk views
 

@@ -21,7 +21,7 @@ MingDesk is a [Tauri 2](https://tauri.app) app: a Rust core with a React board.
    The first build after it may ask to use the key from your keychain: enter your login password and click
    **Always Allow**.
 4. `npm run app -- --open` builds `MingDesk.app` (in `src-tauri/target/release/bundle/macos/`) and opens it.
-   MingDesk appears in the menu bar, not the Dock.
+   MingDesk opens its board, with an icon in the Dock and one in the menu bar.
 
 `npm run tauri dev` gives a live-reloading board for UI work, but check the Accessibility steps with the built
 app: under `tauri dev` macOS charges the permission to the app that launched it (VS Code or Terminal).
