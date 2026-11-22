@@ -84,12 +84,15 @@ jobs:
       - name: Check it
         run: |
           APP=src-tauri/target/universal-apple-darwin/release/bundle/macos/MingDesk.app
-          lipo -archs "$APP/Contents/MacOS/mingdesk" | tee /dev/stderr | grep -q x86_64
-          lipo -archs "$APP/Contents/MacOS/mingdesk" | grep -q arm64
-          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")" = 10.14
+          fail() { echo "::error::$1"; exit 1; }
+          ARCHS=$(lipo -archs "$APP/Contents/MacOS/mingdesk"); echo "architectures: $ARCHS"
+          case "$ARCHS" in *x86_64*arm64*|*arm64*x86_64*) ;; *) fail "not universal: $ARCHS" ;; esac
+          MIN=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist"); echo "minimum macOS: $MIN"
+          [ "$MIN" = 10.14 ] || fail "minimum macOS is $MIN, not 10.14"
+          SIG=$(codesign -dvv "$APP" 2>&1 || true); echo "$SIG"
           if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
-            codesign --verify --deep --strict "$APP"
-            codesign -dv "$APP" 2>&1 | grep -q '^Authority=MingDesk Dev$'
+            codesign --verify --deep --strict --verbose=2 "$APP" || fail "codesign --verify failed"
+            echo "$SIG" | grep -q '^Authority=MingDesk Dev$' || fail "not signed by MingDesk Dev"
           fi
           echo "APP=$APP" >> "$GITHUB_ENV"
 
