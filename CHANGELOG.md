@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3 (2026-11-22): M1 preview
+
+- **Tidier on Mojave.** Mojave's WebKit has no spacing between items in a row, so labels ran together
+  ("ApplicationsFinder", "Display 12560 × 1440"). The board now adds that spacing itself where it's missing.
+  The List view's toolbar no longer lands on the setup bar when the list is long. The Density and Windows
+  sliders have a visible track.
+- A setup named after its only display no longer says the name twice ("Display 1 Display 1").
+- With one display, the List view uses the full width.
+- **Export desk** (in the footer) saves every open window and where it sits, with the macOS version and Mac
+  model, as a JSON file in Downloads. It's for trying board designs against a real desk: put the file in
+  `snapshots/` and open the browser preview with `?snapshot=<file>`. The file holds real window titles, so
+  `snapshots/` stays out of git.
+
 ## 0.2.2 (2026-11-22): M1 preview
 
 - **Runs on macOS Mojave again.** On a Mojave Mac with its original Safari (12), the board's window stayed

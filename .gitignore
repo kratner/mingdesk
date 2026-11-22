@@ -26,3 +26,6 @@ dist-ssr
 # Mobile icons that `tauri icon` always writes; MingDesk is desktop only.
 src-tauri/icons/android/
 src-tauri/icons/ios/
+
+# Desk snapshots from "Export desk" (real window titles): for local testing only.
+snapshots/

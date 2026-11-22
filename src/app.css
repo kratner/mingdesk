@@ -46,7 +46,7 @@ button.primary:hover { filter: brightness(1.06); background: var(--fo-gold); }
 .steps { margin: 0 0 20px; padding-left: 22px; color: var(--fo-text-2); display: grid; gap: 6px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
-.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.board { display: grid; grid-gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .pane { min-height: 160px; }
 
 .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: var(--fo-radius-pill);
@@ -63,11 +63,12 @@ button.primary:hover { filter: brightness(1.06); background: var(--fo-gold); }
 .foot { display: flex; justify-content: space-between; padding: 8px 20px; border-top: 1px solid var(--fo-line);
   font-size: 12px; color: var(--fo-muted); }
 .made { display: inline-flex; align-items: center; gap: 6px; }
+.foot-left { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
 @media (max-width: 760px) { .body { grid-template-columns: 1fr; } .spaces { display: none; } }
 
 /* The setup bar and view switcher stay put while the List scrolls (Keith, 2026-11-21). */
-.board-head { position: sticky; top: -24px; z-index: 20; display: flex; flex-direction: column; gap: 14px;
+.board-head { position: -webkit-sticky; position: sticky; top: -24px; z-index: 20; display: flex; flex-direction: column; gap: 14px;
   margin: -24px -24px 0; padding: 24px 24px 12px; background: var(--fo-bg); border-bottom: 1px solid transparent; }
 
 /* ---- The desk (M1): setup bar, toolbar, List and Desk views ---- */
@@ -105,8 +106,10 @@ input:focus-visible { outline: 2px solid var(--fo-gold); outline-offset: 1px; }
 /* List */
 .list { display: flex; flex-direction: column; gap: 14px; }
 /* Displays (or apps) side by side when the board is wide enough; one column when it isn't. */
-.list.columns { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; }
+.list.columns { display: grid; grid-gap: 14px; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; }
 .group.wide { grid-column: 1 / -1; }
+/* One display (a laptop on its own): its list takes the full width instead of the left column. */
+.list.columns > .group:only-child { grid-column: 1 / -1; }
 .fold { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit;
   letter-spacing: inherit; text-align: left; min-width: 0; }
 .fold:hover { background: none; color: var(--fo-gold-ink); }
@@ -124,6 +127,13 @@ input:focus-visible { outline: 2px solid var(--fo-gold); outline-offset: 1px; }
 .density-compact button.icon { width: 24px; height: 24px; font-size: 14px; }
 .density { display: inline-flex; align-items: center; gap: 8px; }
 .density input { width: 90px; accent-color: var(--fo-gold); }
+/* Drawn by hand: accent-color needs Safari 15.4, and without it Mojave's WebKit shows a bare thumb with no track. */
+.density input[type='range'] { -webkit-appearance: none; appearance: none; height: 16px; background: transparent; margin: 0; }
+.density input[type='range']::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--fo-line); }
+.density input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
+  background: var(--fo-gold); border: 0; }
+.density input[type='range']::-moz-range-track { height: 4px; border-radius: 2px; background: var(--fo-line); }
+.density input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--fo-gold); border: 0; }
 .density-name { min-width: 52px; }
 .fill-name { min-width: 72px; }
 .group { background: var(--fo-surface); border: 1px solid var(--fo-line); border-radius: var(--fo-radius-lg); padding: 12px 14px; }
@@ -191,7 +201,7 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 .screen-tray .chip.count-chip.min::before { content: '▁ '; }
 .screen-tray .chip.count-chip.away::before { content: '▭ '; }
 .screen-tray .chip.count-chip[aria-expanded='true'] { border-color: var(--fo-gold); color: var(--fo-gold-ink); }
-.scrim { position: absolute; inset: 0; z-index: 1999; background: rgb(0 0 0 / 0.38); }
+.scrim { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 1999; background: rgb(0 0 0 / 0.38); }
 /* The tray list: its own compact sizes (not the density setting), raised clearly above the canvas. */
 .tray-list { --raised: #FFFFFF; position: absolute; z-index: 2000; display: flex; flex-direction: column; gap: 6px; padding: 10px; overflow: hidden;
   background: var(--raised); border: 1px solid var(--fo-muted); border: 1px solid color-mix(in srgb, var(--fo-text) 28%, transparent); border-radius: var(--fo-radius-md);
@@ -223,3 +233,89 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 .canvas-hint { position: absolute; left: 12px; bottom: 8px; right: 110px; z-index: 5; font-size: 11px; color: var(--fo-muted); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .canvas-fit { position: absolute; right: 10px; top: 10px; z-index: 1500; background: var(--fo-surface); }
+
+/* ---- Old WebKit (macOS Mojave) ----
+   Flex `gap` needs Safari 14.1; before that it's ignored and labels run together ("ApplicationsFinder"). index.html
+   tags <html class="no-flex-gap"> when it's missing, and these margins stand in for it. Keep this list in step with
+   every flex container above that has a gap. `?nogap` in the browser preview turns the gaps off and these on, to check
+   the fallback without an old Mac. */
+/* Old WebKit shrinks a column's items below their content when the column overflows (the List view did, so the
+   toolbar landed on the setup bar). Items keep their size; the Desk view alone is meant to shrink. */
+.main > *, .deskboard > *, .board-head > *, .list > *, .spaces > * { flex-shrink: 0; }
+.deskboard > .deskview { flex-shrink: 1; }
+.force-no-gap .spaces,
+.force-no-gap .main,
+.force-no-gap .board-head,
+.force-no-gap .deskboard,
+.force-no-gap .list:not(.columns),
+.force-no-gap .deskview,
+.force-no-gap .tray-list,
+.force-no-gap .top,
+.force-no-gap .pill,
+.force-no-gap .made,
+.force-no-gap .foot-left,
+.force-no-gap .setupbar .other,
+.force-no-gap .rename,
+.force-no-gap .fold,
+.force-no-gap .sub-label,
+.force-no-gap .density,
+.force-no-gap .row,
+.force-no-gap .row-main,
+.force-no-gap .row-actions,
+.force-no-gap .screen-label,
+.force-no-gap .win-tag,
+.force-no-gap .tray-list-rows button,
+.force-no-gap .density-compact .row-text,
+.force-no-gap .actions,
+.force-no-gap .setupbar,
+.force-no-gap .setup-current,
+.force-no-gap .setup-others,
+.force-no-gap .setup-ghosts,
+.force-no-gap .toolbar,
+.force-no-gap .group-head,
+.force-no-gap .desktops,
+.force-no-gap .screen-tray,
+.force-no-gap .offscreen-note { gap: 0 !important; }
+.no-flex-gap .spaces > * + * { margin-top: 4px; }
+.no-flex-gap .main > * + * { margin-top: 16px; }
+.no-flex-gap .board-head > * + * { margin-top: 14px; }
+.no-flex-gap .deskboard > * + *:not(.board-head) { margin-top: 14px; }
+.no-flex-gap .list:not(.columns) > * + * { margin-top: 14px; }
+.no-flex-gap .deskview > * + * { margin-top: 8px; }
+.no-flex-gap .tray-list > * + * { margin-top: 6px; }
+.no-flex-gap .top > * + * { margin-left: 10px; }
+.no-flex-gap .pill > * + * { margin-left: 6px; }
+.no-flex-gap .made > * + * { margin-left: 6px; }
+.no-flex-gap .foot-left > * + * { margin-left: 10px; }
+.no-flex-gap .setupbar .other > * + * { margin-left: 2px; }
+.no-flex-gap .rename > * + * { margin-left: 6px; }
+.no-flex-gap .fold > * + * { margin-left: 6px; }
+.no-flex-gap .sub-label > * + * { margin-left: 8px; }
+.no-flex-gap .density > * + * { margin-left: 8px; }
+.no-flex-gap .row > * + * { margin-left: 4px; }
+.no-flex-gap .row-main > * + * { margin-left: 10px; }
+.no-flex-gap .row-actions > * + * { margin-left: 2px; }
+.no-flex-gap .screen-label > * + * { margin-left: 6px; }
+.no-flex-gap .win-tag > * + * { margin-left: 4px; }
+.no-flex-gap .tray-list-rows button > * + * { margin-left: 8px; }
+.no-flex-gap .density-compact .row-text > * + * { margin-left: 8px; }
+.no-flex-gap .actions > * { margin-right: 10px; margin-bottom: 10px; }
+.no-flex-gap .actions { margin-bottom: -10px; }
+.no-flex-gap .setupbar > * { margin-right: 20px; margin-bottom: 8px; }
+.no-flex-gap .setupbar { padding-bottom: 2px; }
+.no-flex-gap .setup-current > * { margin-right: 6px; margin-bottom: 6px; }
+.no-flex-gap .setup-current { margin-bottom: -6px; }
+.no-flex-gap .setup-others > * { margin-right: 6px; margin-bottom: 6px; }
+.no-flex-gap .setup-others { margin-bottom: -6px; }
+.no-flex-gap .setup-ghosts > * { margin-right: 6px; margin-bottom: 6px; }
+.no-flex-gap .setup-ghosts { margin-bottom: -6px; }
+.no-flex-gap .toolbar > * { margin-right: 10px; margin-bottom: 10px; }
+.no-flex-gap .toolbar { margin-bottom: -10px; }
+.no-flex-gap .group-head > * { margin-right: 8px; margin-bottom: 8px; }
+.no-flex-gap .group-head { margin-bottom: -2px; }
+.no-flex-gap .desktops > * { margin-right: 6px; margin-bottom: 6px; }
+.no-flex-gap .desktops { margin-bottom: 2px; }
+.no-flex-gap .screen-tray > * { margin-right: 4px; margin-bottom: 4px; }
+.no-flex-gap .screen-tray { bottom: 0; }
+.no-flex-gap .offscreen-note > * { margin-right: 6px; margin-bottom: 6px; }
+.no-flex-gap .offscreen-note { margin-bottom: -6px; }

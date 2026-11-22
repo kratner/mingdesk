@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { FourOuncesMark } from './FourOuncesMark';
 import { Board } from './desk/Board';
-import { inTauri } from './desk/api';
+import { exportDesk, inTauri } from './desk/api';
 
 type Permission = 'granted' | 'missing' | 'notNeeded';
 interface Status {
@@ -18,6 +18,7 @@ export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [justGranted, setJustGranted] = useState(false);
+  const [exported, setExported] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -64,6 +65,17 @@ export default function App() {
     }
   }
 
+  async function exportNow() {
+    setError(null);
+    try {
+      const path = await exportDesk();
+      setExported(`Saved ${path.split('/').pop()} to Downloads`);
+      window.setTimeout(() => setExported(null), 6000);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
   return (
     <div className="app">
       <header className="top">
@@ -99,8 +111,21 @@ export default function App() {
       </div>
 
       <footer className="foot">
-        <span>
-          MingDesk {status?.version ?? ''} · {status?.platform ?? ''}
+        <span className="foot-left">
+          <span>
+            MingDesk {status?.version ?? ''} · {status?.platform ?? ''}
+          </span>
+          {status && status.permission !== 'missing' && (
+            <button
+              type="button"
+              className="link"
+              onClick={exportNow}
+              title="Save every open window and where it sits, as a JSON file, for testing the board's design"
+            >
+              Export desk
+            </button>
+          )}
+          {exported && <span role="status">{exported}</span>}
         </span>
         <span className="made">
           <FourOuncesMark height={12} /> A Four Ounces tool

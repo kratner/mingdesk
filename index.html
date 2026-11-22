@@ -25,6 +25,21 @@
         setTimeout(function () { show('it timed out'); }, 8000);
       })();
     </script>
+    <script>
+      // Flex `gap` arrived in Safari 14.1. Without it, app.css spaces flex rows with margins instead
+      // (html.no-flex-gap). `?nogap` forces that in a modern browser, to check it.
+      (function () {
+        var force = /[?&]nogap(&|=|$)/.test(location.search);
+        var box = document.createElement('div');
+        box.style.cssText = 'display:flex;flex-direction:column;row-gap:1px;position:absolute;visibility:hidden';
+        box.appendChild(document.createElement('div'));
+        box.appendChild(document.createElement('div'));
+        document.body.appendChild(box);
+        var supported = box.scrollHeight === 1;
+        document.body.removeChild(box);
+        if (force || !supported) document.documentElement.className += ' no-flex-gap' + (force ? ' force-no-gap' : '');
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

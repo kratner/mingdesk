@@ -396,7 +396,8 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
           return (
             <Fragment key={d.id}>
             <div className="screen-label" style={{ ...labelAt(d.frame) }} onDoubleClick={() => zoomTo(d)}>
-              {d.name} <span className="meta">{resolution(d)}</span>
+              <span>{d.name}</span>
+              <span className="meta">{resolution(d)}</span>
               {d.main && <span className="badge">main</span>}
               {!d.connected && <span className="badge">not connected</span>}
               {current && d.desktops.length > 1 && <span className="meta"> · {names.get(current.id)}</span>}

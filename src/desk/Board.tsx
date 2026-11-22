@@ -247,7 +247,10 @@ function SetupBar({
         ) : (
           <>
             <strong>{setup.name}</strong>
-            <span className="setup-displays">{setup.displayNames.join(' + ')}</span>
+            {/* A setup named after its one display ("Display 1") doesn't say the name twice. */}
+            {setup.displayNames.join(' + ') !== setup.name && (
+              <span className="setup-displays">{setup.displayNames.join(' + ')}</span>
+            )}
             <button
               type="button"
               className="link"
@@ -274,7 +277,8 @@ function SetupBar({
           <span className="label">Other setups</span>
           {others.map((o) => (
             <span key={o.id} className="other" title={o.displayNames.join(' + ')}>
-              {o.name} <span className="setup-displays">({o.displayNames.length} {o.displayNames.length === 1 ? 'display' : 'displays'})</span>
+              <span>{o.name}</span>
+              <span className="setup-displays">({o.displayNames.length} {o.displayNames.length === 1 ? 'display' : 'displays'})</span>
               {forgetting === o.id ? (
                 <>
                   <button type="button" className="small danger" onClick={() => onForget(o.id)}>

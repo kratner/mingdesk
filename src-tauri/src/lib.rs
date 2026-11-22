@@ -81,6 +81,50 @@ fn desk(
     desk_of(platform.as_ref(), &known)
 }
 
+/// "Export desk": the desk as it is now and the Mac it came from, saved as JSON in Downloads and shown in
+/// Finder. For trying board designs on a real desk in the browser preview (`?snapshot=`, src/desk/api.ts).
+/// The file holds real window titles: keep it out of the repo (`snapshots/` is git-ignored).
+#[tauri::command]
+fn export_desk(
+    platform: State<'_, PlatformState>,
+    known: State<'_, KnownState>,
+    stamp: String,
+) -> Result<String, String> {
+    let desk = desk_of(platform.as_ref(), &known)?;
+    let file = serde_json::json!({
+        "kind": "mingdesk-snapshot",
+        "format": 1,
+        "exported": stamp,
+        "version": env!("CARGO_PKG_VERSION"),
+        "platform": platform.name(),
+        "os": command_output("sw_vers", &["-productVersion"]),
+        "model": command_output("sysctl", &["-n", "hw.model"]),
+        "desk": desk,
+    });
+    let home = std::env::var_os("HOME").ok_or("No home folder to save into.")?;
+    let name: String = stamp
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .collect();
+    let path = PathBuf::from(home)
+        .join("Downloads")
+        .join(format!("MingDesk desk {name}.json"));
+    let text = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
+    std::fs::write(&path, text).map_err(|e| format!("Couldn't save {}: {e}", path.display()))?;
+    log::event(&format!("exported the desk to {}", path.display()));
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg("-R").arg(&path).spawn();
+    Ok(path.display().to_string())
+}
+
+/// A short command's trimmed output (for the export's OS version and Mac model), or None.
+fn command_output(program: &str, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new(program).args(args).output().ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 /// The switcher's search over the desk as it is now: window ids, best match first.
 #[tauri::command]
 fn search(
@@ -301,7 +345,8 @@ pub fn run() {
             act,
             adopt_setup,
             rename_setup,
-            forget_setup
+            forget_setup,
+            export_desk
         ])
         .setup(|app| {
             log::event(&format!("started, version {}", env!("CARGO_PKG_VERSION")));

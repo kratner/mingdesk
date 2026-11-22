@@ -14,6 +14,30 @@ function mockState(): Desk {
   if (!mock) mock = mockDesk(new URLSearchParams(window.location.search).get('mock'));
   return mock;
 }
+
+/** A real desk saved by "Export desk": `?snapshot=<file>` loads snapshots/<file> (npm run dev serves the folder). */
+async function loadSnapshot(): Promise<void> {
+  const name = new URLSearchParams(window.location.search).get('snapshot');
+  if (mock || !name) return;
+  const res = await fetch(`/snapshots/${encodeURIComponent(name)}`);
+  if (!res.ok) throw new Error(`No snapshots/${name} (${res.status}).`);
+  const file = await res.json();
+  mock = (file && file.desk ? file.desk : file) as Desk;
+}
+
+/** Saves the desk as it is now to a JSON file (Downloads, shown in Finder) and returns where. */
+export async function exportDesk(): Promise<string> {
+  const now = new Date();
+  const two = (n: number) => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
+  if (inTauri) return invoke<string>('export_desk', { stamp });
+  const file = { kind: 'mingdesk-snapshot', format: 1, exported: stamp, version: 'dev', platform: 'browser', desk: mockState() };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }));
+  a.download = `MingDesk desk ${stamp}.json`;
+  a.click();
+  return a.download;
+}
 // structuredClone needs Safari 15.4; the mock desk is plain JSON anyway.
 const copy = (d: Desk): Desk => JSON.parse(JSON.stringify(d));
 function mockChanged() {
@@ -23,6 +47,7 @@ function mockChanged() {
 
 export async function getDesk(): Promise<Desk> {
   if (inTauri) return invoke<Desk>('desk');
+  await loadSnapshot();
   return copy(mockState());
 }
 
