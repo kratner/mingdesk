@@ -104,12 +104,33 @@ input:focus-visible { outline: 2px solid var(--fo-gold); outline-offset: 1px; }
 
 /* List */
 .list { display: flex; flex-direction: column; gap: 14px; }
+/* Displays (or apps) side by side when the board is wide enough; one column when it isn't. */
+.list.columns { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; }
+.group.wide { grid-column: 1 / -1; }
+.fold { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit;
+  letter-spacing: inherit; text-align: left; min-width: 0; }
+.fold:hover { background: none; color: var(--fo-gold-ink); }
+.chev { flex: none; width: 12px; font-size: 12px; color: var(--fo-text-2); }
+.sub-label { display: flex; align-items: center; gap: 8px; }
+
+/* Density (Compact / Normal / Large), one set of sizes the rows and the Desk view read. */
+.deskboard { --row-min: 44px; --row-pad: 6px; --title-size: 14px; --sub-size: 12px; --badge: 24px; --badge-font: 12px; --win-font: 10px; }
+.deskboard.density-compact { --row-min: 28px; --row-pad: 2px; --title-size: 13px; --sub-size: 12px; --badge: 16px; --badge-font: 9px; --win-font: 9px; }
+.deskboard.density-large { --row-min: 56px; --row-pad: 10px; --title-size: 16px; --sub-size: 13px; --badge: 32px; --badge-font: 15px; --win-font: 12px; }
+.density-compact .group { padding: 8px 10px; }
+.density-compact .sub-label { padding-top: 3px; }
+.density-compact .row-text { flex-direction: row; align-items: baseline; gap: 8px; }
+.density-compact .row-app { flex: none; max-width: 45%; }
+.density-compact button.icon { width: 24px; height: 24px; font-size: 14px; }
+.density { display: inline-flex; align-items: center; gap: 8px; }
+.density input { width: 90px; accent-color: var(--fo-gold); }
+.density-name { min-width: 52px; }
 .group { background: var(--fo-surface); border: 1px solid var(--fo-line); border-radius: var(--fo-radius-lg); padding: 12px 14px; }
 .group.ghost { border-style: dashed; background: transparent; }
 .group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
 .group-head h3 { margin: 0; font-size: 15px; }
 .group-head .count { font-size: 12px; color: var(--fo-muted); }
-.group-head button { margin-left: auto; }
+.group-head > button.small { margin-left: auto; }
 .desktops { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
 .chip { font-size: 12px; padding: 2px 10px; border-radius: var(--fo-radius-pill); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip.current { background: var(--fo-gold-soft); border-color: var(--fo-gold); color: var(--fo-gold-ink); font-weight: 600; opacity: 1; }
@@ -121,17 +142,20 @@ input:focus-visible { outline: 2px solid var(--fo-gold); outline-offset: 1px; }
 .row { display: flex; align-items: center; gap: 4px; border-radius: var(--fo-radius-sm); }
 .row:hover, .row:focus-within { background: var(--fo-surface-2); }
 .row.focused { box-shadow: inset 3px 0 0 var(--fo-gold); }
-.row-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: none; padding: 6px 8px; min-height: 44px; }
+.row-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: none; padding: var(--row-pad) 8px;
+  min-height: var(--row-min); }
+.row-title { font-size: var(--title-size); }
 .row-main:hover { background: none; }
 .row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .row-title, .row-app { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row-app { font-size: 12px; color: var(--fo-muted); }
+.row-app { font-size: var(--sub-size); color: var(--fo-muted); }
 .row-actions { display: flex; gap: 2px; padding-right: 6px; opacity: 0; }
 .row:hover .row-actions, .row:focus-within .row-actions { opacity: 1; }
 @media (hover: none) { .row-actions { opacity: 1; } }
 button.icon { width: 30px; height: 30px; padding: 0; border: 0; background: none; font-size: 16px; line-height: 1; color: var(--fo-muted); }
 button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
-.app-badge { flex: none; width: 24px; height: 24px; border-radius: 6px; display: inline-grid; place-items: center; font-size: 12px; font-weight: 700;
+.app-badge { flex: none; width: var(--badge, 24px); height: var(--badge, 24px); border-radius: 6px; display: inline-grid; place-items: center;
+  font-size: var(--badge-font, 12px); font-weight: 700;
   color: #fff; background: hsl(var(--hue) 45% 42%); }
 
 /* Desk */
@@ -148,7 +172,7 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 /* Hover lifts the window above the ones covering it, so its whole outline shows (a peek; the real stacking is unchanged). */
 .win:hover { border-color: var(--fo-gold); background: var(--fo-surface); z-index: 999 !important; }
 .win.focused { border: 2px solid var(--fo-gold); }
-.win-bar { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 4px; padding: 2px 4px; background: var(--fo-surface-2); font-size: 10px; height: 18px; overflow: hidden; }
+.win-bar { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 4px; padding: 2px 4px; background: var(--fo-surface-2); font-size: var(--win-font, 10px); height: calc(var(--win-font, 10px) + 8px); overflow: hidden; }
 .win-bar .app-badge { width: 13px; height: 13px; font-size: 8px; border-radius: 3px; }
 .win-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .screen-tray { position: absolute; left: 4px; right: 4px; bottom: 4px; z-index: 1001; display: flex; flex-wrap: wrap; gap: 4px; }

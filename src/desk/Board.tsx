@@ -7,6 +7,9 @@ import { act, adoptSetup, forgetSetup, getDesk, renameSetup, watchDesk } from '.
 import type { Action, Desk, SetupSummary } from './types';
 
 type ViewName = 'list' | 'desk';
+const DENSITIES = ['compact', 'normal', 'large'] as const;
+type Density = (typeof DENSITIES)[number];
+const DENSITY_LABEL: Record<Density, string> = { compact: 'Compact', normal: 'Normal', large: 'Large' };
 
 // Per-viewer conveniences only; the board works without them (private windows, blocked storage).
 function remembered<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
@@ -35,6 +38,10 @@ export function Board() {
   });
   const [grouping, setGrouping] = useState<Grouping>(() => remembered('mingdesk.grouping', 'display', ['display', 'app'] as const));
   const [filter, setFilter] = useState('');
+  const [density, setDensity] = useState<Density>(() => {
+    const asked = new URLSearchParams(window.location.search).get('density') as Density | null;
+    return asked && DENSITIES.includes(asked) ? asked : remembered('mingdesk.density', 'normal', DENSITIES);
+  });
 
   const refresh = useCallback(async () => {
     try {
@@ -89,7 +96,7 @@ export function Board() {
   const ghosts = desk.displays.filter((d) => !d.connected);
 
   return (
-    <div className="deskboard">
+    <div className={`deskboard density-${density}`}>
       {error && (
         <div className="banner danger" role="alert">
           {error}
@@ -133,7 +140,24 @@ export function Board() {
               />
             </>
           )}
-          <span className="meta stretch">
+          <label className="density" title="How much fits on screen">
+          <span className="meta">Density</span>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={1}
+            value={DENSITIES.indexOf(density)}
+            aria-valuetext={DENSITY_LABEL[density]}
+            onChange={(e) => {
+              const d = DENSITIES[Number(e.target.value)];
+              setDensity(d);
+              remember('mingdesk.density', d);
+            }}
+          />
+          <span className="meta density-name">{DENSITY_LABEL[density]}</span>
+        </label>
+        <span className="meta stretch">
             {count} {count === 1 ? 'window' : 'windows'} on {connected} {connected === 1 ? 'display' : 'displays'}
           </span>
         </div>

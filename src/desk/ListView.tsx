@@ -3,6 +3,7 @@
 // "By app" regroups the same rows by app. Dragging rows between displays and in the stack is M2.
 
 import { appHue, desktopNames, matches, resolution, windowLabel } from './format';
+import { useFolds, type Folds } from './folds';
 import type { Action, Desk, DeskDisplay, WindowInfo } from './types';
 
 export type Grouping = 'display' | 'app';
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function ListView({ desk, grouping, filter, onAct }: Props) {
+  const folds = useFolds(filter.trim() !== '');
   const names = desktopNames(desk);
   const displayOf = new Map<number, DeskDisplay>();
   desk.displays.forEach((d) => d.windows.forEach((w) => displayOf.set(w.id, d)));
@@ -29,45 +31,60 @@ export function ListView({ desk, grouping, filter, onAct }: Props) {
     total.forEach((w) => byApp.set(w.pid, [...(byApp.get(w.pid) ?? []), w]));
     const apps = [...byApp.values()].sort((a, b) => a[0].app.localeCompare(b[0].app));
     return (
-      <div className="list">
-        {apps.map((ws) => (
+      <div className="list columns">
+        {apps.map((ws) => {
+          const id = `a:${ws[0].appId ?? ws[0].app}`;
+          return (
           <section key={ws[0].pid} className="group" aria-label={ws[0].app}>
             <header className="group-head">
-              <AppBadge app={ws[0].app} />
-              <h3>{ws[0].app}</h3>
+              <Fold id={id} folds={folds}>
+                <AppBadge app={ws[0].app} />
+                <h3>{ws[0].app}</h3>
+              </Fold>
               <span className="count">{ws.length}</span>
               <button type="button" className="small" onClick={() => onAct({ kind: 'bringAppForward', pid: ws[0].pid })}>
                 Bring forward
               </button>
             </header>
-            {ws.map((w) => (
-              <Row
-                key={w.id}
-                w={w}
-                onAct={onAct}
-                where={[displayOf.get(w.id)?.name ?? 'Off-screen', w.desktop != null && !w.onCurrentDesktop ? names.get(w.desktop) : null]}
-              />
-            ))}
+            {!folds.isFolded(id) && (
+              <ul className="rows">
+                {ws.map((w) => (
+                  <Row
+                    key={w.id}
+                    w={w}
+                    onAct={onAct}
+                    where={[displayOf.get(w.id)?.name ?? 'Off-screen', w.desktop != null && !w.onCurrentDesktop ? names.get(w.desktop) : null]}
+                  />
+                ))}
+              </ul>
+            )}
           </section>
-        ))}
+          );
+        })}
       </div>
     );
   }
 
   return (
-    <div className="list">
+    <div className="list columns">
       {desk.displays.map((d) => (
-        <DisplaySection key={d.id} d={d} names={names} filter={filter} onAct={onAct} />
+        <DisplaySection key={d.id} d={d} names={names} filter={filter} onAct={onAct} folds={folds} />
       ))}
       {desk.offscreen.some((w) => matches(w, filter)) && (
-        <section className="group" aria-label="Off-screen">
+        <section className="group wide" aria-label="Off-screen">
           <header className="group-head">
-            <h3>Off-screen</h3>
+            <Fold id="offscreen" folds={folds}>
+              <h3>Off-screen</h3>
+            </Fold>
             <span className="hint">On no display, e.g. left behind on a monitor that was unplugged.</span>
           </header>
-          {desk.offscreen.filter((w) => matches(w, filter)).map((w) => (
-            <Row key={w.id} w={w} onAct={onAct} />
-          ))}
+          {!folds.isFolded('offscreen') && (
+            <ul className="rows">
+              {desk.offscreen.filter((w) => matches(w, filter)).map((w) => (
+                <Row key={w.id} w={w} onAct={onAct} />
+              ))}
+            </ul>
+          )}
         </section>
       )}
     </div>
@@ -79,11 +96,13 @@ function DisplaySection({
   names,
   filter,
   onAct,
+  folds,
 }: {
   d: DeskDisplay;
   names: Map<number, string>;
   filter: string;
   onAct: (a: Action) => void;
+  folds: Folds;
 }) {
   if (!d.connected) {
     return (
@@ -111,69 +130,110 @@ function DisplaySection({
   return (
     <section className="group" aria-label={d.name}>
       <header className="group-head">
-        <h3>{d.name}</h3>
+        <Fold id={`d:${d.id}`} folds={folds}>
+          <h3>{d.name}</h3>
+        </Fold>
         <span className="meta">{resolution(d)}</span>
         {d.main && <span className="badge">main</span>}
         <span className="count">{d.windows.length}</span>
       </header>
-      {d.desktops.length > 1 && (
-        <div className="desktops" aria-label="Desktops">
-          {d.desktops.map((x) => {
-            const first = d.windows.find((w) => w.desktop === x.id && !w.minimized);
-            return (
-              <button
-                key={x.id}
-                type="button"
-                className={`chip${x.current ? ' current' : ''}${x.fullScreen ? ' fs' : ''}`}
-                disabled={!first || x.current}
-                title={first ? `Go to ${names.get(x.id)}` : 'macOS gives no way to switch to an empty desktop'}
-                onClick={() => first && onAct({ kind: 'focus', window: first.id })}
-              >
-                {names.get(x.id)}
-              </button>
-            );
-          })}
-        </div>
+      {!folds.isFolded(`d:${d.id}`) && (
+        <>
+        {d.desktops.length > 1 && (
+          <div className="desktops" aria-label="Desktops">
+            {d.desktops.map((x) => {
+              const first = d.windows.find((w) => w.desktop === x.id && !w.minimized);
+              return (
+                <button
+                  key={x.id}
+                  type="button"
+                  className={`chip${x.current ? ' current' : ''}${x.fullScreen ? ' fs' : ''}`}
+                  disabled={!first || x.current}
+                  title={first ? `Go to ${names.get(x.id)}` : 'macOS gives no way to switch to an empty desktop'}
+                  onClick={() => first && onAct({ kind: 'focus', window: first.id })}
+                >
+                  {names.get(x.id)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {here.length > 0 && (
+          <Sub id={`s:${d.id}:here`} folds={folds} count={here.length} label={current ? `${names.get(current.id)} · showing now` : null}>
+            {here.map((w) => (
+              <Row key={w.id} w={w} onAct={onAct} />
+            ))}
+          </Sub>
+        )}
+        {elsewhere.map(({ x, ws }) => (
+          <Sub key={x.id} id={`s:${d.id}:${x.id}`} folds={folds} count={ws.length} label={names.get(x.id) ?? 'Another desktop'} dim>
+            {ws.map((w) => (
+              <Row key={w.id} w={w} onAct={onAct} />
+            ))}
+          </Sub>
+        ))}
+        {unplaced.length > 0 && (
+          <Sub id={`s:${d.id}:other`} folds={folds} count={unplaced.length} label="Another desktop" dim>
+            {unplaced.map((w) => (
+              <Row key={w.id} w={w} onAct={onAct} />
+            ))}
+          </Sub>
+        )}
+        {minimized.length > 0 && (
+          <Sub id={`s:${d.id}:min`} folds={folds} count={minimized.length} label="Minimized" dim>
+            {minimized.map((w) => (
+              <Row key={w.id} w={w} onAct={onAct} />
+            ))}
+          </Sub>
+        )}
+        {shown.length === 0 && <p className="muted empty">{filter ? 'No match here.' : 'No windows.'}</p>}
+        </>
       )}
-      {here.length > 0 && (
-        <Sub label={current ? `${names.get(current.id)} · showing now` : null}>
-          {here.map((w) => (
-            <Row key={w.id} w={w} onAct={onAct} />
-          ))}
-        </Sub>
-      )}
-      {elsewhere.map(({ x, ws }) => (
-        <Sub key={x.id} label={names.get(x.id) ?? 'Another desktop'} dim>
-          {ws.map((w) => (
-            <Row key={w.id} w={w} onAct={onAct} />
-          ))}
-        </Sub>
-      ))}
-      {unplaced.length > 0 && (
-        <Sub label="Another desktop" dim>
-          {unplaced.map((w) => (
-            <Row key={w.id} w={w} onAct={onAct} />
-          ))}
-        </Sub>
-      )}
-      {minimized.length > 0 && (
-        <Sub label="Minimized" dim>
-          {minimized.map((w) => (
-            <Row key={w.id} w={w} onAct={onAct} />
-          ))}
-        </Sub>
-      )}
-      {shown.length === 0 && <p className="muted empty">{filter ? 'No match here.' : 'No windows.'}</p>}
     </section>
   );
 }
 
-function Sub({ label, dim, children }: { label: string | null; dim?: boolean; children: React.ReactNode }) {
+function Sub({
+  id,
+  folds,
+  count,
+  label,
+  dim,
+  children,
+}: {
+  id: string;
+  folds: Folds;
+  count: number;
+  label: string | null;
+  dim?: boolean;
+  children: React.ReactNode;
+}) {
+  const folded = label !== null && folds.isFolded(id);
   return (
     <div className={`sub${dim ? ' dim' : ''}`}>
-      {label && <div className="sub-label">{label}</div>}
-      <ul className="rows">{children}</ul>
+      {label && (
+        <div className="sub-label">
+          <Fold id={id} folds={folds}>
+            {label}
+          </Fold>
+          {folded && <span className="count">{count}</span>}
+        </div>
+      )}
+      {!folded && <ul className="rows">{children}</ul>}
     </div>
+  );
+}
+
+/** A group's name as a button that folds and unfolds it. */
+function Fold({ id, folds, children }: { id: string; folds: Folds; children: React.ReactNode }) {
+  const folded = folds.isFolded(id);
+  return (
+    <button type="button" className="fold" aria-expanded={!folded} onClick={() => folds.toggle(id)}>
+      <span className="chev" aria-hidden="true">
+        {folded ? '▸' : '▾'}
+      </span>
+      {children}
+    </button>
   );
 }
 
