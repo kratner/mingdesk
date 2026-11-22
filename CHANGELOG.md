@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.2.0 (2026-11-22): M1 preview
+## 0.2.1 (2026-11-22): M1 preview
 
-The first download. MingDesk now sees your desk; the ⌥Space switcher, which completes M1, comes next.
+The first download. (0.2.0 was tagged but never published: the release workflow's final check failed
+without saying why. It now names any check that fails.) MingDesk now sees your desk; the ⌥Space switcher, which completes M1, comes next.
 
 - **The desk, live.** Every window on every display and Mission Control desktop, including full-screen spaces,
   kept up to date as windows open, close, move and change, apps come and go, you switch desktops or plug in
