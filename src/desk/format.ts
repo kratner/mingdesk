@@ -10,6 +10,8 @@ export function resolution(d: DeskDisplay): string {
   return `${Math.round(d.frame.w)} × ${Math.round(d.frame.h)}`;
 }
 
+const lastFullScreenNames = new Map<number, string>();
+
 /**
  * What Mission Control calls each desktop: ordinary desktops are numbered across all displays ("Desktop 1" on
  * the first display, "Desktop 2" on the next…); a full-screen space is named after its window.
@@ -23,7 +25,11 @@ export function desktopNames(desk: Desk): Map<number, string> {
     for (const x of d.desktops) {
       if (x.fullScreen) {
         const w = byDesktop.get(x.id);
-        names.set(x.id, w ? `${w.app}: ${shortTitle(w)}` : 'Full screen');
+        // Mid-swipe the window server briefly doesn't say which window a full-screen space holds; keep the name
+        // it had rather than flashing "Full screen".
+        const name = w ? `${w.app}: ${shortTitle(w)}` : (lastFullScreenNames.get(x.id) ?? 'Full screen');
+        if (w) lastFullScreenNames.set(x.id, name);
+        names.set(x.id, name);
       } else {
         names.set(x.id, `Desktop ${++n}`);
       }

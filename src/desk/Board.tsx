@@ -95,46 +95,48 @@ export function Board() {
           {error}
         </div>
       )}
+      <div className="board-head">
       <SetupBar
-        setup={desk.setup}
-        others={desk.otherSetups}
-        ghosts={ghosts.map((g) => g.name)}
-        onAdopt={run(adoptSetup)}
-        onRename={(id, name) => run(() => renameSetup(id, name))()}
-        onForget={(id) => run(() => forgetSetup(id))()}
-      />
-      <div className="toolbar">
-        <div className="seg" role="group" aria-label="View">
-          <button type="button" aria-pressed={view === 'list'} onClick={() => choose('list')}>
-            List
-          </button>
-          <button type="button" aria-pressed={view === 'desk'} onClick={() => choose('desk')}>
-            Desk
-          </button>
+          setup={desk.setup}
+          others={desk.otherSetups}
+          ghosts={ghosts.map((g) => g.name)}
+          onAdopt={run(adoptSetup)}
+          onRename={(id, name) => run(() => renameSetup(id, name))()}
+          onForget={(id) => run(() => forgetSetup(id))()}
+        />
+        <div className="toolbar">
+          <div className="seg" role="group" aria-label="View">
+            <button type="button" aria-pressed={view === 'list'} onClick={() => choose('list')}>
+              List
+            </button>
+            <button type="button" aria-pressed={view === 'desk'} onClick={() => choose('desk')}>
+              Desk
+            </button>
+          </div>
+          {view === 'list' && (
+            <>
+              <div className="seg" role="group" aria-label="Group by">
+                <button type="button" aria-pressed={grouping === 'display'} onClick={() => group('display')}>
+                  By display
+                </button>
+                <button type="button" aria-pressed={grouping === 'app'} onClick={() => group('app')}>
+                  By app
+                </button>
+              </div>
+              <input
+                className="filter"
+                type="search"
+                placeholder="Filter windows"
+                aria-label="Filter windows"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </>
+          )}
+          <span className="meta stretch">
+            {count} {count === 1 ? 'window' : 'windows'} on {connected} {connected === 1 ? 'display' : 'displays'}
+          </span>
         </div>
-        {view === 'list' && (
-          <>
-            <div className="seg" role="group" aria-label="Group by">
-              <button type="button" aria-pressed={grouping === 'display'} onClick={() => group('display')}>
-                By display
-              </button>
-              <button type="button" aria-pressed={grouping === 'app'} onClick={() => group('app')}>
-                By app
-              </button>
-            </div>
-            <input
-              className="filter"
-              type="search"
-              placeholder="Filter windows"
-              aria-label="Filter windows"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-          </>
-        )}
-        <span className="meta stretch">
-          {count} {count === 1 ? 'window' : 'windows'} on {connected} {connected === 1 ? 'display' : 'displays'}
-        </span>
       </div>
       {view === 'list' ? (
         <ListView desk={desk} grouping={grouping} filter={filter} onAct={onAct} />

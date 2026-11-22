@@ -42,6 +42,9 @@ fn resync() {
     }
 }
 
+/// How long a desktop-switch animation takes to land, near enough.
+const SWITCH_SETTLED: std::time::Duration = std::time::Duration::from_millis(700);
+
 /// Run-loop turns (half a second each) between syncs nobody asked for.
 const RESYNC_EVERY: u32 = 20;
 
@@ -107,11 +110,20 @@ fn watch_workspace() {
             ("NSWorkspaceDidUnhideApplicationNotification", false),
             ("NSWorkspaceDidActivateApplicationNotification", false),
         ] {
+            let space_switch = name == "NSWorkspaceActiveSpaceDidChangeNotification";
             let block = RcBlock::new(move |_note: *mut AnyObject| {
                 if apps_changed {
                     resync();
                 }
                 report(Change::Windows);
+                if space_switch {
+                    // The notification comes as the swipe starts; mid-animation the window server doesn't yet say
+                    // which desktop each full-screen window is on. Look again once it has landed.
+                    std::thread::spawn(|| {
+                        std::thread::sleep(SWITCH_SETTLED);
+                        report(Change::Windows);
+                    });
+                }
             });
             let name = CFString::new(name);
             let _: *mut AnyObject = msg_send![

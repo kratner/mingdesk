@@ -89,8 +89,33 @@ fn search(
 }
 
 #[tauri::command]
-fn act(platform: State<'_, PlatformState>, action: desk::Action) -> Result<(), String> {
-    desk::perform(platform.as_ref(), &action)
+fn act(
+    app: AppHandle,
+    platform: State<'_, PlatformState>,
+    action: desk::Action,
+) -> Result<(), String> {
+    use desk::Action::*;
+    // MingDesk's own board is listed too; act on it through Tauri, not Accessibility.
+    let own = std::process::id() as i32;
+    let on_own = match &action {
+        BringAppForward { pid } => *pid == own,
+        Focus { window } | Minimize { window } | Close { window } => platform
+            .snapshot()
+            .is_ok_and(|s| s.windows.iter().any(|w| w.id == *window && w.pid == own)),
+    };
+    if !on_own {
+        return desk::perform(platform.as_ref(), &action);
+    }
+    let board = app
+        .get_webview_window(BOARD)
+        .ok_or("The board is missing.")?;
+    match action {
+        Focus { .. } | BringAppForward { .. } => show_board(&app),
+        Minimize { .. } => board.minimize().map_err(|e| e.to_string())?,
+        // Closing the board hides it, as its own close button does.
+        Close { .. } => board.hide().map_err(|e| e.to_string())?,
+    }
+    Ok(())
 }
 
 /// Saves the remembered displays and setups after the board changed them, and refreshes the desk.

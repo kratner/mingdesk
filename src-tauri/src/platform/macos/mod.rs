@@ -206,6 +206,38 @@ pub fn read(sources: Sources) -> (Snapshot, Vec<Source>) {
             found_by.push(source);
         }
     }
+    // MingDesk's own board, while it's on screen (Keith, 2026-11-21: it helps to see where the board is).
+    // Read from CoreGraphics only: Accessibility calls into our own process from here could wait on our own
+    // main thread. Actions on it go through Tauri in lib.rs, not through this platform.
+    for w in all
+        .iter()
+        .filter(|w| w.pid == own && w.layer == 0 && w.onscreen && w.frame.w >= MIN_SIDE)
+    {
+        let desktop = if sources.desktops {
+            spaces::desktop_of(w.id)
+        } else {
+            None
+        };
+        windows.push(WindowInfo {
+            id: w.id,
+            pid: own,
+            app: "MingDesk".into(),
+            app_id: Some("live.fourounces.mingdesk".into()),
+            title: if w.name.is_empty() {
+                "MingDesk".into()
+            } else {
+                w.name.clone()
+            },
+            frame: w.frame,
+            minimized: false,
+            full_screen: false,
+            on_current_desktop: true,
+            desktop,
+            focused: front == Some(own),
+            order: stack.get(&w.id).copied().unwrap_or(STACK_REST + w.order),
+        });
+        found_by.push(Source::WindowListOnly);
+    }
     (
         Snapshot {
             displays,
