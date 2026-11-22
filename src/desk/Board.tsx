@@ -196,7 +196,8 @@ function SetupBar({
           </form>
         ) : (
           <>
-            <strong title={setup.displayNames.join(' + ')}>{setup.name}</strong>
+            <strong>{setup.name}</strong>
+            <span className="setup-displays">{setup.displayNames.join(' + ')}</span>
             <button
               type="button"
               className="link"
@@ -223,7 +224,7 @@ function SetupBar({
           <span className="label">Other setups</span>
           {others.map((o) => (
             <span key={o.id} className="other" title={o.displayNames.join(' + ')}>
-              {o.name}
+              {o.name} <span className="setup-displays">({o.displayNames.length} {o.displayNames.length === 1 ? 'display' : 'displays'})</span>
               {forgetting === o.id ? (
                 <>
                   <button type="button" className="small danger" onClick={() => onForget(o.id)}>

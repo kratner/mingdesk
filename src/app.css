@@ -82,6 +82,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .setupbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 10px 14px; border: 1px solid var(--fo-line);
   border-radius: var(--fo-radius-md); background: var(--fo-surface); }
+.setup-displays { font-size: 12px; color: var(--fo-muted); }
 .setupbar .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fo-muted); margin-right: 6px; }
 .setup-current, .setup-others, .setup-ghosts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .setup-ghosts { color: var(--fo-gold-ink); font-size: 13px; }
@@ -140,7 +141,8 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
   white-space: nowrap; overflow: hidden; color: var(--fo-text-2); cursor: zoom-in; }
 .win { position: absolute; padding: 0; border: 1px solid var(--fo-line); border-radius: 4px; background: var(--fo-surface); overflow: hidden;
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.18); display: block; text-align: left; }
-.win:hover { border-color: var(--fo-gold); background: var(--fo-surface); }
+/* Hover lifts the window above the ones covering it, so its whole outline shows (a peek; the real stacking is unchanged). */
+.win:hover { border-color: var(--fo-gold); background: var(--fo-surface); z-index: 999 !important; }
 .win.focused { border: 2px solid var(--fo-gold); }
 .win-bar { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 4px; padding: 2px 4px; background: var(--fo-surface-2); font-size: 10px; height: 18px; overflow: hidden; }
 .win-bar .app-badge { width: 13px; height: 13px; font-size: 8px; border-radius: 3px; }
