@@ -19,7 +19,7 @@ npx tauri build --bundles app
 
 APP="src-tauri/target/release/bundle/macos/MingDesk.app"
 if [ "$(uname)" = Darwin ]; then
-  codesign -dv "$APP" 2>&1 | grep -E '^(Identifier|Authority|Signature)=' || true
+  codesign -dvv "$APP" 2>&1 | grep -E '^(Identifier|Authority|Signature)=' || true
   if [ "${1:-}" = "--open" ]; then
     osascript -e 'tell application "MingDesk" to quit' >/dev/null 2>&1 || true
     sleep 1
