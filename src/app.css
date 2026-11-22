@@ -160,7 +160,8 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 
 /* Desk */
 .deskview { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
-.deskview-tools { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.deskview-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.deskview-tools .hint { flex: 1; min-width: 200px; }
 .canvas { position: relative; flex: 1; min-height: 360px; overflow: hidden; border-radius: var(--fo-radius-lg); background: var(--fo-surface-2);
   border: 1px solid var(--fo-line); touch-action: none; }
 .screen { position: absolute; background: var(--fo-bg); border: 1px solid var(--fo-line); border-radius: 6px; overflow: hidden; }
@@ -169,6 +170,9 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
   white-space: nowrap; overflow: hidden; color: var(--fo-text-2); cursor: zoom-in; }
 /* Windows are outlines, so the ones behind stay visible through the ones in front. */
 .win { position: absolute; box-sizing: border-box; border: 1px solid var(--fo-muted); border-radius: 4px; pointer-events: none; }
+/* The fill, under the outline: the Outlines–Solid slider sets how opaque it is. */
+.win::before { content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: 3px; background: var(--fo-surface);
+  opacity: var(--win-fill, 0); }
 .win.focused { border: 2px solid var(--fo-gold); }
 /* The window under the pointer: lifted above the rest so its whole outline shows (the real stacking is unchanged). */
 .win.hot { border: 2px solid var(--fo-gold); background: rgb(201 162 74 / 0.10); z-index: 999 !important; }

@@ -28,6 +28,19 @@ const LIST_FILTER_FROM = 8;
 const TAG_H = 18;
 const TAG_MIN_W = 48;
 const TAG_MAX_W = 220;
+/** How solid windows are drawn, 0 (outlines: every window's position shows) to 100 (solid: only what's in
+ * front shows). Kept per viewer; `?fill=` sets it for a screenshot. */
+const FILL_KEY = 'mingdesk.windowFill';
+function initialFill(): number {
+  const asked = Number(new URLSearchParams(window.location.search).get('fill'));
+  if (asked >= 0 && asked <= 100 && new URLSearchParams(window.location.search).has('fill')) return asked;
+  try {
+    const v = Number(localStorage.getItem(FILL_KEY));
+    return localStorage.getItem(FILL_KEY) !== null && v >= 0 && v <= 100 ? v : 0;
+  } catch {
+    return 0;
+  }
+}
 
 type TrayKind = 'away' | 'behind' | 'min';
 interface TrayItem {
@@ -161,6 +174,7 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [view, setView] = useState<View>(FIT);
+  const [fill, setFill] = useState(initialFill);
   // A covered window whose "behind" chip or list entry is hovered: drawn as an outline where it sits.
   const [peek, setPeek] = useState<number | null>(null);
   // The tray list open, if any: one display's other desktops, hidden windows or minimized windows.
@@ -364,11 +378,33 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
     <div className="deskview">
       <div className="deskview-tools">
         <span className="hint">Click a spot to list the windows there · pinch to zoom · two-finger scroll to pan · double-click a display to zoom to it</span>
+        <label className="density fill" title="Draw windows as outlines (every window's position shows) or solid (only what's in front shows)">
+          <span className="meta">Outlines</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={fill}
+            aria-label="Window fill"
+            aria-valuetext={`${fill}% solid`}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setFill(v);
+              try {
+                localStorage.setItem(FILL_KEY, String(v));
+              } catch {
+                /* not kept; fine */
+              }
+            }}
+          />
+          <span className="meta">Solid</span>
+        </label>
         <button type="button" className="small" disabled={view.zoom === 1} onClick={() => setView(FIT)}>
           Fit all
         </button>
       </div>
-      <div className="canvas" ref={box} onKeyDown={(e) => e.key === '0' && setView(FIT)}>
+      <div className="canvas" ref={box} style={{ '--win-fill': fill / 100 } as React.CSSProperties} onKeyDown={(e) => e.key === '0' && setView(FIT)}>
         {desk.displays.map((d) => {
           const current = d.desktops.find((x) => x.current);
           const front = drawnOn(d);
