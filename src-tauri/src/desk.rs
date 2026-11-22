@@ -118,7 +118,6 @@ impl Known {
     }
 
     /// "This is a setup of its own": records the connected set even though it's part of a bigger one.
-    #[allow(dead_code)] // wired to the board's button in the UI step
     pub fn adopt(&mut self, connected: &[Display]) -> bool {
         let set = set_of(connected);
         if set.is_empty() || self.setups.iter().any(|s| s.displays == set) {
@@ -128,8 +127,19 @@ impl Known {
         true
     }
 
+    /// Gives a setup the user's name for it ("Home", "Office"). Blank names are refused.
+    pub fn rename_setup(&mut self, id: &str, name: &str) -> bool {
+        let name = name.trim();
+        match self.setups.iter_mut().find(|s| s.id == id) {
+            Some(s) if !name.is_empty() && s.name != name => {
+                s.name = name.to_string();
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// "Forget this setup": drops it, and any display no other setup uses.
-    #[allow(dead_code)] // wired to the board's button in the UI step
     pub fn forget_setup(&mut self, id: &str) -> bool {
         let before = self.setups.len();
         self.setups.retain(|s| s.id != id);

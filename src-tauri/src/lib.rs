@@ -93,6 +93,55 @@ fn act(platform: State<'_, PlatformState>, action: desk::Action) -> Result<(), S
     desk::perform(platform.as_ref(), &action)
 }
 
+/// Saves the remembered displays and setups after the board changed them, and refreshes the desk.
+fn after_setup_change(app: &AppHandle, known: &desk::Known) -> Result<(), String> {
+    if let Some(path) = known_path(app) {
+        live::save(&path, known)?;
+    }
+    if let Some(tx) = app.state::<NudgeState>().lock().unwrap().as_ref() {
+        let _ = tx.send(Change::Displays);
+    }
+    Ok(())
+}
+
+/// "This is a setup of its own": the displays connected now become a setup, and their ghosts go.
+#[tauri::command]
+fn adopt_setup(
+    app: AppHandle,
+    platform: State<'_, PlatformState>,
+    known: State<'_, KnownState>,
+) -> Result<(), String> {
+    let displays = platform.snapshot()?.displays;
+    let mut known = known.lock().map_err(|e| e.to_string())?;
+    if known.adopt(&displays) {
+        after_setup_change(&app, &known)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn rename_setup(
+    app: AppHandle,
+    known: State<'_, KnownState>,
+    id: String,
+    name: String,
+) -> Result<(), String> {
+    let mut known = known.lock().map_err(|e| e.to_string())?;
+    if known.rename_setup(&id, &name) {
+        after_setup_change(&app, &known)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn forget_setup(app: AppHandle, known: State<'_, KnownState>, id: String) -> Result<(), String> {
+    let mut known = known.lock().map_err(|e| e.to_string())?;
+    if known.forget_setup(&id) {
+        after_setup_change(&app, &known)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn open_permission_settings(platform: State<'_, PlatformState>) -> Result<(), String> {
     platform.open_permission_settings()
@@ -210,7 +259,10 @@ pub fn run() {
             open_permission_settings,
             desk,
             search,
-            act
+            act,
+            adopt_setup,
+            rename_setup,
+            forget_setup
         ])
         .setup(|app| {
             // Menu bar only: no Dock icon, no app menu (PLAN.md §7, decided 2026-11-08).

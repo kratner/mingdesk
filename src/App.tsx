@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { FourOuncesMark } from './FourOuncesMark';
+import { Board } from './desk/Board';
+import { inTauri } from './desk/api';
 
 type Permission = 'granted' | 'missing' | 'notNeeded';
 interface Status {
@@ -19,7 +21,10 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const next = await invoke<Status>('status');
+      // In a plain browser (npm run dev, screenshots) the board shows the made-up desk in desk/mock.ts.
+      const next = inTauri
+        ? await invoke<Status>('status')
+        : { permission: 'granted' as const, platform: 'browser preview, sample desk', version: 'dev' };
       setStatus((prev) => {
         if (prev?.permission === 'missing' && next.permission === 'granted') setJustGranted(true);
         return next;
@@ -71,9 +76,9 @@ export default function App() {
         <nav className="spaces" aria-label="Spaces">
           <div className="spaces-title">Spaces</div>
           <button className="space active" type="button">
-            Desk
+            Open now
           </button>
-          <p className="soon">Your spaces arrive with saving (M2).</p>
+          <p className="soon">Saved collections and your own spaces arrive with saving (M3) and organising (M4).</p>
         </nav>
 
         <main className="main">
@@ -89,7 +94,7 @@ export default function App() {
           )}
           {status === null && !error && <p className="muted">Starting…</p>}
           {status?.permission === 'missing' && <Onboarding onAllow={allow} onOpenSettings={openSettings} />}
-          {status && status.permission !== 'missing' && <EmptyBoard />}
+          {status && status.permission !== 'missing' && <Board />}
         </main>
       </div>
 
@@ -137,23 +142,5 @@ function Onboarding({ onAllow, onOpenSettings }: { onAllow: () => void; onOpenSe
         </span>
       </div>
     </section>
-  );
-}
-
-function EmptyBoard() {
-  return (
-    <div className="board">
-      <section className="card pane" aria-labelledby="open-title">
-        <h2 id="open-title">Open windows</h2>
-        <p className="muted">Every window on this computer, grouped by app and by display, arrives in the next step (M1).</p>
-      </section>
-      <section className="card pane" aria-labelledby="coll-title">
-        <h2 id="coll-title">Collections</h2>
-        <p className="muted">
-          Save a set of windows and bring them back the way they were: <strong>Save these windows</strong> and{' '}
-          <strong>Save desk</strong> arrive in M2.
-        </p>
-      </section>
-    </div>
   );
 }
