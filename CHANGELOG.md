@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 (2026-11-22): M1 preview
+
+- On Mojave, the Density and Windows labels no longer touch their sliders.
+
 ## 0.2.3 (2026-11-22): M1 preview
 
 - **Tidier on Mojave.** Mojave's WebKit has no spacing between items in a row, so labels ran together

@@ -128,7 +128,8 @@ input:focus-visible { outline: 2px solid var(--fo-gold); outline-offset: 1px; }
 .density { display: inline-flex; align-items: center; gap: 8px; }
 .density input { width: 90px; accent-color: var(--fo-gold); }
 /* Drawn by hand: accent-color needs Safari 15.4, and without it Mojave's WebKit shows a bare thumb with no track. */
-.density input[type='range'] { -webkit-appearance: none; appearance: none; height: 16px; background: transparent; margin: 0; }
+.density input[type='range'] { -webkit-appearance: none; appearance: none; height: 16px; background: transparent; margin-top: 0; margin-bottom: 0; }
+/* (Only top and bottom: a side margin here would outrank the Mojave spacing below and glue the label to the slider.) */
 .density input[type='range']::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--fo-line); }
 .density input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
   background: var(--fo-gold); border: 0; }
