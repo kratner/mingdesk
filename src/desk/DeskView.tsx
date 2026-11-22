@@ -1,5 +1,7 @@
 // The Desk view (PLAN.md §8): every display in its real arrangement, scaled to fit, with the windows of the
-// desktop showing on each drawn in stacking order. Trackpad first: pinch to zoom, two-finger scroll to pan,
+// desktop showing on each drawn in stacking order, as outlines. A window's title shows only where its top-left
+// corner isn't covered, so labels never pile up; hovering names the window under the pointer, and a click lists
+// every window stacked at that spot, front to back. Trackpad first: pinch to zoom, two-finger scroll to pan,
 // double-click a display to zoom to it, Fit all to go back. Moving and resizing windows here is M2.
 
 import { Fragment, useEffect, useRef, useState } from 'react';
@@ -22,6 +24,10 @@ const FIT: View = { zoom: 1, x: 0, y: 0 };
 const TRAY_SINGLES = 2;
 /** Past this many entries the tray list gets a filter box. */
 const LIST_FILTER_FROM = 8;
+/** A window's title label, in canvas pixels: shown only where this much of its top-left is clear. */
+const TAG_H = 18;
+const TAG_MIN_W = 48;
+const TAG_MAX_W = 220;
 
 type TrayKind = 'away' | 'behind' | 'min';
 interface TrayItem {
@@ -35,6 +41,8 @@ interface TrayItem {
   window: number | null;
   /** Where the window sits, for the list's little map; null for a desktop. */
   frame: Rect | null;
+  /** A heading shown above this entry (the stack list's sections). */
+  heading?: string;
 }
 interface TrayGroup {
   kind: TrayKind;
@@ -48,19 +56,22 @@ function TrayList({
   group,
   title,
   screen,
+  ordered = false,
   onPeek,
   onPick,
 }: {
   group: TrayGroup;
   title: string;
   screen: Rect;
+  /** Keep the given order (front to back) under the items' headings instead of grouping by app. */
+  ordered?: boolean;
   onPeek: (id: number | null) => void;
   onPick: (id: number) => void;
 }) {
   const [filter, setFilter] = useState('');
   const f = filter.trim().toLowerCase();
   const items = group.items.filter((it) => !f || it.label.toLowerCase().includes(f));
-  const apps = [...new Set(items.map((it) => it.app))];
+  const apps = ordered ? [null] : [...new Set(items.map((it) => it.app))];
   return (
     <>
       <div className="tray-list-head">{title}</div>
@@ -76,7 +87,7 @@ function TrayList({
       )}
       <ul className="tray-list-rows" onMouseLeave={() => onPeek(null)}>
         {apps.map((app) => {
-          const mine = items.filter((it) => it.app === app);
+          const mine = ordered ? items : items.filter((it) => it.app === app);
           return (
             <Fragment key={app ?? 'desktops'}>
               {app && apps.length > 1 && (
@@ -85,7 +96,9 @@ function TrayList({
                 </li>
               )}
               {mine.map((it) => (
-                <li key={it.key}>
+                <Fragment key={it.key}>
+                {it.heading && <li className="tray-list-app">{it.heading}</li>}
+                <li>
                   <button
                     type="button"
                     disabled={it.window === null}
@@ -106,6 +119,7 @@ function TrayList({
                     )}
                   </button>
                 </li>
+                </Fragment>
               ))}
             </Fragment>
           );
@@ -151,6 +165,10 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
   const [peek, setPeek] = useState<number | null>(null);
   // The tray list open, if any: one display's other desktops, hidden windows or minimized windows.
   const [open, setOpen] = useState<{ display: string; kind: TrayKind } | null>(null);
+  // The window under the pointer, outlined and named.
+  const [hot, setHot] = useState<{ id: number; x: number; y: number } | null>(null);
+  // The stack list open, if any: every window at the spot clicked (desk coordinates), front to back.
+  const [stack, setStack] = useState<{ display: string; x: number; y: number; left: number; top: number } | null>(null);
 
   function trayFor(d: DeskDisplay): TrayGroup[] {
     const byApp = (a: WindowInfo, b: WindowInfo) => a.app.localeCompare(b.app) || windowLabel(a).localeCompare(windowLabel(b), undefined, { numeric: true });
@@ -213,11 +231,16 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
   // Esc or a click outside closes the tray list.
   const popRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(null);
+    if (!open && !stack) return;
+    const close = () => {
+      setOpen(null);
+      setStack(null);
+      setPeek(null);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     const onDown = (e: MouseEvent) => {
       const t = e.target as Element;
-      if (!popRef.current?.contains(t) && !t.closest('.count-chip')) setOpen(null);
+      if (!popRef.current?.contains(t) && !t.closest('.count-chip')) close();
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('mousedown', onDown);
@@ -225,7 +248,7 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('mousedown', onDown);
     };
-  }, [open]);
+  }, [open, stack]);
   const names = desktopNames(desk);
 
   useEffect(() => {
@@ -291,7 +314,43 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
     return () => el.removeEventListener('wheel', onWheel);
   }, [size, b.w, b.h, fit]);
 
+  /** The windows drawn on a display, front to back. */
+  const drawnOn = (d: DeskDisplay) =>
+    d.windows.filter((w) => w.onCurrentDesktop && !w.minimized).sort((a, c) => a.order - c.order);
+  const inside = (r: Rect, x: number, y: number) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  /** A point on a display, in desk coordinates, from a mouse event on it. */
+  const deskPoint = (d: DeskDisplay, e: React.MouseEvent) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return { x: d.frame.x + (e.clientX - r.left) / s, y: d.frame.y + (e.clientY - r.top) / s };
+  };
+  /** How wide a title label can be at a window's top-left corner before a window in front covers it (canvas px). */
+  function tagWidth(w: WindowInfo, front: WindowInfo[]): number {
+    const r = w.frame;
+    const h = TAG_H / s;
+    let free = Math.min(r.w, TAG_MAX_W / s);
+    for (const f of front) {
+      const g = f.frame;
+      if (g.y >= r.y + h || g.y + g.h <= r.y) continue; // misses the label's row
+      if (g.x <= r.x && g.x + g.w > r.x) return 0; // covers the corner
+      if (g.x > r.x) free = Math.min(free, g.x - r.x);
+    }
+    return free * s;
+  }
+
+  /** A window's box inside its display's drawing, clipped to the display so a maximized window's outline shows on
+   * all four sides (the display's 1px border takes 2px off the room inside). */
+  function inDisplay(r: Rect, d: DeskDisplay): React.CSSProperties {
+    const W = d.frame.w * s - 2;
+    const H = d.frame.h * s - 2;
+    const x0 = Math.max(0, (r.x - d.frame.x) * s);
+    const y0 = Math.max(0, (r.y - d.frame.y) * s);
+    const x1 = Math.min(W, (r.x + r.w - d.frame.x) * s);
+    const y1 = Math.min(H, (r.y + r.h - d.frame.y) * s);
+    return { left: x0, top: y0, width: Math.max(x1 - x0, 8), height: Math.max(y1 - y0, 8) };
+  }
+
   function zoomTo(d: DeskDisplay) {
+    setStack(null);
     const zoom = Math.min(MAX_ZOOM, Math.min((size.w - PAD * 2) / d.frame.w, (size.h - PAD * 2) / d.frame.h) / fit);
     const cx = (size.w - b.w * fit) / 2;
     const cy = (size.h - b.h * fit) / 2;
@@ -304,7 +363,7 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
   return (
     <div className="deskview">
       <div className="deskview-tools">
-        <span className="hint">Pinch to zoom · two-finger scroll to pan · double-click a display to zoom to it</span>
+        <span className="hint">Click a spot to list the windows there · pinch to zoom · two-finger scroll to pan · double-click a display to zoom to it</span>
         <button type="button" className="small" disabled={view.zoom === 1} onClick={() => setView(FIT)}>
           Fit all
         </button>
@@ -312,10 +371,10 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
       <div className="canvas" ref={box} onKeyDown={(e) => e.key === '0' && setView(FIT)}>
         {desk.displays.map((d) => {
           const current = d.desktops.find((x) => x.current);
-          const drawn = d.windows
-            .filter((w) => w.onCurrentDesktop && !w.minimized)
-            .sort((a, b2) => b2.order - a.order); // back to front
-          const peeking = d.windows.find((w) => w.id === peek && d.covered.includes(w.id));
+          const front = drawnOn(d);
+          const drawn = [...front].reverse(); // back to front
+          const peeking = d.windows.find((w) => w.id === peek);
+          const hotWin = hot && front.find((w) => w.id === hot.id);
           return (
             <Fragment key={d.id}>
             <div className="screen-label" style={{ ...labelAt(d.frame) }} onDoubleClick={() => zoomTo(d)}>
@@ -328,42 +387,60 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
               className={`screen${d.connected ? '' : ' ghost'}`}
               style={place(d.frame)}
               onDoubleClick={() => zoomTo(d)}
+              onMouseMove={(e) => {
+                const p = deskPoint(d, e);
+                const w = front.find((x) => inside(x.frame, p.x, p.y));
+                setHot(w ? { id: w.id, x: (p.x - d.frame.x) * s, y: (p.y - d.frame.y) * s } : null);
+              }}
+              onMouseLeave={() => setHot(null)}
+              onClick={(e) => {
+                if ((e.target as Element).closest('button')) return;
+                const p = deskPoint(d, e);
+                if (!front.some((w) => inside(w.frame, p.x, p.y))) return;
+                const c = box.current!.getBoundingClientRect();
+                setOpen(null);
+                setStack({ display: d.id, x: p.x, y: p.y, left: e.clientX - c.left, top: e.clientY - c.top });
+              }}
               aria-label={`${d.name}${d.connected ? '' : ', not connected'}`}
             >
               {drawn.map((w, i) => {
                 const r = w.frame;
+                const tag = tagWidth(w, front.slice(0, front.length - 1 - i));
                 return (
-                  <button
+                  <div
                     key={w.id}
-                    type="button"
-                    className={`win${w.focused ? ' focused' : ''}`}
-                    style={{
-                      left: (r.x - d.frame.x) * s,
-                      top: (r.y - d.frame.y) * s,
-                      width: Math.max(r.w * s, 8),
-                      height: Math.max(r.h * s, 8),
-                      zIndex: i + 1,
-                    }}
-                    title={`${windowLabel(w)} — ${w.app}`}
-                    onClick={() => onAct({ kind: 'focus', window: w.id })}
-                    onDoubleClick={(e) => e.stopPropagation()}
+                    className={`win${w.focused ? ' focused' : ''}${hotWin?.id === w.id ? ' hot' : ''}`}
+                    style={{ ...inDisplay(r, d), zIndex: i + 1 }}
                   >
-                    <span className="win-bar">
-                      <AppBadge app={w.app} />
-                      <span className="win-title">{windowLabel(w)}</span>
-                    </span>
-                  </button>
+                    {tag >= TAG_MIN_W && (
+                      <button
+                        type="button"
+                        className="win-tag"
+                        style={{ maxWidth: tag }}
+                        title={`${windowLabel(w)} — ${w.app}. Click to bring it forward.`}
+                        onClick={() => onAct({ kind: 'focus', window: w.id })}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <AppBadge app={w.app} />
+                        <span className="win-title">{trimApp(windowLabel(w), w.app)}</span>
+                      </button>
+                    )}
+                  </div>
                 );
               })}
+              {hotWin && !stack && (
+                <div
+                  className="hot-name"
+                  style={{ left: Math.min(hot!.x + 12, d.frame.w * s - 40), top: hot!.y + 14 }}
+                  aria-hidden="true"
+                >
+                  {hotWin.app}: {windowLabel(hotWin)}
+                </div>
+              )}
               {peeking && (
                 <div
                   className="peek"
-                  style={{
-                    left: (peeking.frame.x - d.frame.x) * s,
-                    top: (peeking.frame.y - d.frame.y) * s,
-                    width: peeking.frame.w * s,
-                    height: peeking.frame.h * s,
-                  }}
+                  style={inDisplay(peeking.frame, d)}
                   aria-hidden="true"
                 />
               )}
@@ -427,6 +504,54 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
                   onPeek={(id) => g.kind === 'behind' && setPeek(id)}
                   onPick={(id) => {
                     setOpen(null);
+                    setPeek(null);
+                    onAct({ kind: 'focus', window: id });
+                  }}
+                />
+              </div>
+              </>
+            );
+          })()}
+        {stack &&
+          (() => {
+            const d = desk.displays.find((x) => x.id === stack.display);
+            if (!d) return null;
+            const front = drawnOn(d);
+            const here = front.filter((w) => inside(w.frame, stack.x, stack.y));
+            const rest = front.filter((w) => !here.includes(w));
+            const item = (w: WindowInfo, heading?: string): TrayItem => ({
+              key: `w${w.id}`,
+              label: `${w.app}: ${windowLabel(w)}`,
+              app: w.app,
+              short: `${w.app} · ${trimApp(windowLabel(w), w.app)}`,
+              title: `Bring forward: ${windowLabel(w)}`,
+              window: w.id,
+              frame: w.frame,
+              heading,
+            });
+            const g: TrayGroup = {
+              kind: 'behind',
+              noun: 'windows',
+              items: [
+                ...here.map((w, i) => item(w, i === 0 ? 'Here, front to back' : undefined)),
+                ...rest.map((w, i) => item(w, i === 0 ? 'Elsewhere on this display' : undefined)),
+              ],
+            };
+            const width = Math.min(360, size.w - 16);
+            const left = Math.max(8, Math.min(stack.left + 8, size.w - width - 8));
+            const top = Math.max(8, Math.min(stack.top + 8, size.h - 220));
+            return (
+              <>
+              <div className="scrim" aria-hidden="true" />
+              <div ref={popRef} className="tray-list" style={{ left, top, width, maxHeight: size.h - top - 8 }} role="dialog" aria-label={`${d.name}: windows here`}>
+                <TrayList
+                  group={g}
+                  ordered
+                  screen={d.frame}
+                  title={`${d.name} · ${here.length} ${here.length === 1 ? 'window' : 'windows'} here`}
+                  onPeek={setPeek}
+                  onPick={(id) => {
+                    setStack(null);
                     setPeek(null);
                     onAct({ kind: 'focus', window: id });
                   }}

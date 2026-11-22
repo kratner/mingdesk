@@ -6,6 +6,11 @@
   black: the board was built for Safari 14 and Safari 12 couldn't read it. It's now built for Safari 12, and
   the two newer browser features it used (watching the canvas size, copying the sample desk) have fallbacks.
 - If the board ever can't start, its window now says why instead of staying blank.
+- **Desk view, easier to read.** Windows are drawn as outlines, so the ones behind show through. A window's
+  title appears only where its top-left corner is clear, so titles no longer pile up. Hovering names the window
+  under the pointer and outlines it; clicking a spot lists every window stacked there, front to back, then the
+  rest of that display, and hovering a row outlines that window. A maximized window's outline no longer loses
+  its right and bottom edges.
 
 ## 0.2.1 (2026-11-22): M1 preview
 

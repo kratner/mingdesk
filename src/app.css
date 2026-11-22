@@ -167,14 +167,20 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 .screen.ghost { background: transparent; border: 2px dashed var(--fo-muted); opacity: 0.7; }
 .screen-label { position: absolute; height: 20px; padding: 0 2px; font-size: 11px; font-weight: 600; display: flex; gap: 6px; align-items: center;
   white-space: nowrap; overflow: hidden; color: var(--fo-text-2); cursor: zoom-in; }
-.win { position: absolute; padding: 0; border: 1px solid var(--fo-line); border-radius: 4px; background: var(--fo-surface); overflow: hidden;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18); display: block; text-align: left; }
-/* Hover lifts the window above the ones covering it, so its whole outline shows (a peek; the real stacking is unchanged). */
-.win:hover { border-color: var(--fo-gold); background: var(--fo-surface); z-index: 999 !important; }
+/* Windows are outlines, so the ones behind stay visible through the ones in front. */
+.win { position: absolute; box-sizing: border-box; border: 1px solid var(--fo-muted); border-radius: 4px; pointer-events: none; }
 .win.focused { border: 2px solid var(--fo-gold); }
-.win-bar { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 4px; padding: 2px 4px; background: var(--fo-surface-2); font-size: var(--win-font, 10px); height: calc(var(--win-font, 10px) + 8px); overflow: hidden; }
-.win-bar .app-badge { width: 13px; height: 13px; font-size: 8px; border-radius: 3px; }
+/* The window under the pointer: lifted above the rest so its whole outline shows (the real stacking is unchanged). */
+.win.hot { border: 2px solid var(--fo-gold); background: rgb(201 162 74 / 0.10); z-index: 999 !important; }
+.win-tag { position: absolute; left: 3px; top: 3px; display: flex; align-items: center; gap: 4px; padding: 1px 6px 1px 2px; height: 16px;
+  border: 0; border-radius: 3px; background: var(--fo-surface-2); color: var(--fo-text); font-size: var(--win-font, 10px); pointer-events: auto; overflow: hidden; }
+.win-tag:hover { background: var(--fo-gold-soft); }
+.win-tag .app-badge { width: 12px; height: 12px; font-size: 8px; border-radius: 3px; flex: none; }
 .win-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screen { cursor: pointer; }
+.hot-name { position: absolute; z-index: 1002; max-width: 280px; padding: 2px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; background: var(--fo-surface); border: 1px solid var(--fo-gold); color: var(--fo-text); pointer-events: none;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.35); }
 .screen-tray { position: absolute; left: 4px; right: 4px; bottom: 4px; z-index: 1001; display: flex; flex-wrap: wrap; gap: 4px; }
 .screen-tray .chip { font-size: 10px; padding: 1px 8px; max-width: 200px; background: var(--fo-surface); }
 .screen-tray .chip.count-chip { font-weight: 600; }
@@ -204,7 +210,7 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 .minimap { flex: none; }
 .minimap-screen { fill: none; stroke: var(--fo-muted); stroke-width: 1; }
 .minimap-window { fill: var(--fo-gold); opacity: 0.75; }
-.peek { position: absolute; z-index: 1000; border: 2px dashed var(--fo-gold); border-radius: 4px; background: rgb(201 162 74 / 0.08);
+.peek { position: absolute; box-sizing: border-box; z-index: 1000; border: 2px dashed var(--fo-gold); border-radius: 4px; background: rgb(201 162 74 / 0.08);
   pointer-events: none; }
 .offscreen-note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 
