@@ -27,4 +27,5 @@ pub fn on_activate(f: impl Fn() + 'static) {
             usingBlock: &*block
         ];
     });
+    crate::log::event("on_activate: listening for NSApplicationDidBecomeActive");
 }

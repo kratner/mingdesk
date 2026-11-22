@@ -111,7 +111,11 @@ fn watch_workspace() {
             ("NSWorkspaceDidActivateApplicationNotification", false),
         ] {
             let space_switch = name == "NSWorkspaceActiveSpaceDidChangeNotification";
+            let short = name
+                .trim_start_matches("NSWorkspace")
+                .trim_end_matches("Notification");
             let block = RcBlock::new(move |_note: *mut AnyObject| {
+                crate::log::event(&format!("workspace: {short}"));
                 if apps_changed {
                     resync();
                 }

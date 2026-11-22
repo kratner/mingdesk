@@ -2,6 +2,7 @@
 
 mod desk;
 mod live;
+mod log;
 #[cfg(target_os = "macos")]
 mod mac_app;
 mod platform;
@@ -176,9 +177,14 @@ fn open_permission_settings(platform: State<'_, PlatformState>) -> Result<(), St
 
 fn show_board(app: &AppHandle) {
     if let Some(board) = app.get_webview_window(BOARD) {
-        let _ = board.unminimize();
-        let _ = board.show();
-        let _ = board.set_focus();
+        let unmin = board.unminimize();
+        let shown = board.show();
+        let focused = board.set_focus();
+        log::event(&format!(
+            "show_board unminimize={unmin:?} show={shown:?} focus={focused:?}"
+        ));
+    } else {
+        log::event("show_board: no board window");
     }
     // Windows may have changed while it was hidden.
     if let Some(tx) = app.state::<NudgeState>().lock().unwrap().as_ref() {
@@ -292,12 +298,16 @@ pub fn run() {
             forget_setup
         ])
         .setup(|app| {
+            log::event(&format!("started, version {}", env!("CARGO_PKG_VERSION")));
             // A Dock app with the standard menus; the menu-bar icon stays too (PLAN.md §7.13, 2026-11-22).
             build_tray(app.handle())?;
             #[cfg(target_os = "macos")]
             {
                 let handle = app.handle().clone();
-                mac_app::on_activate(move || show_board(&handle));
+                mac_app::on_activate(move || {
+                    log::event("app became active");
+                    show_board(&handle);
+                });
             }
             if let Some(path) = known_path(app.handle()) {
                 *app.state::<KnownState>().lock().unwrap() = live::load(&path);
@@ -314,6 +324,7 @@ pub fn run() {
             {
                 api.prevent_close();
                 let _ = window.hide();
+                log::event("board closed (hidden)");
             }
         })
         // About, Hide, Quit (⌘Q), Edit (copy and paste in the board's fields), Window. Settings… joins with the
@@ -324,6 +335,7 @@ pub fn run() {
         .run(|app, event| {
             // A click on the Dock icon shows the board, whether or not it was open.
             if let tauri::RunEvent::Reopen { .. } = event {
+                log::event("dock icon clicked (reopen)");
                 show_board(app);
             }
         });
