@@ -22,6 +22,9 @@ pub struct DeskDisplay {
     pub windows: Vec<WindowInfo>,
     /// Its desktops and full-screen spaces, in Mission Control's order; empty when the OS won't say.
     pub desktops: Vec<Desktop>,
+    /// Windows on the desktop showing now that the windows in front of them cover (almost) entirely, so the Desk
+    /// view can list them instead of losing them (Keith, 2026-11-22).
+    pub covered: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize)]
@@ -219,6 +222,32 @@ fn stacking_order(a: &WindowInfo, b: &WindowInfo) -> std::cmp::Ordering {
         .then(a.id.cmp(&b.id))
 }
 
+/// Below this share of its area showing, a window counts as covered.
+const COVERED_BELOW: f64 = 0.02;
+
+/// The windows (ids) on the desktop showing now that the windows in front of them cover, front to back.
+/// `windows` must be in stacking order, front-most first.
+pub fn covered(windows: &[WindowInfo]) -> Vec<u32> {
+    let visible: Vec<&WindowInfo> = windows
+        .iter()
+        .filter(|w| w.on_current_desktop && !w.minimized)
+        .collect();
+    let mut out = Vec::new();
+    for (i, w) in visible.iter().enumerate() {
+        let mut showing = vec![w.frame];
+        for front in &visible[..i] {
+            showing = showing.iter().flat_map(|p| p.minus(&front.frame)).collect();
+            if showing.is_empty() {
+                break;
+            }
+        }
+        if showing.iter().map(Rect::area).sum::<f64>() < w.frame.area() * COVERED_BELOW {
+            out.push(w.id);
+        }
+    }
+    out
+}
+
 /// Builds the desk the board shows from one snapshot and the displays and setups MingDesk remembers.
 pub fn build(snapshot: &Snapshot, known: &Known) -> Desk {
     let mut connected = snapshot.displays.clone();
@@ -239,6 +268,7 @@ pub fn build(snapshot: &Snapshot, known: &Known) -> Desk {
                 .filter(|x| x.display == d.id)
                 .cloned()
                 .collect(),
+            covered: Vec::new(),
         })
         .collect();
 
@@ -256,6 +286,7 @@ pub fn build(snapshot: &Snapshot, known: &Known) -> Desk {
     }
     for d in &mut displays {
         d.windows.sort_by(stacking_order);
+        d.covered = covered(&d.windows);
     }
     offscreen.sort_by(stacking_order);
 
@@ -284,6 +315,7 @@ pub fn build(snapshot: &Snapshot, known: &Known) -> Desk {
             connected: false,
             windows: Vec::new(),
             desktops: Vec::new(),
+            covered: Vec::new(),
         });
     }
 
@@ -402,6 +434,76 @@ mod tests {
 
     fn ids(d: &DeskDisplay) -> Vec<u32> {
         d.windows.iter().map(|w| w.id).collect()
+    }
+
+    #[test]
+    fn a_window_is_covered_only_when_the_ones_in_front_hide_it() {
+        let full = Rect::new(0.0, 0.0, 1920.0, 1050.0);
+        let left = Rect::new(0.0, 0.0, 960.0, 1050.0);
+        let right = Rect::new(960.0, 0.0, 960.0, 1050.0);
+        let small = Rect::new(100.0, 100.0, 800.0, 600.0);
+        // Keith's case: a full-screen-sized window in front hides a smaller one behind it.
+        assert_eq!(
+            covered(&[
+                window(1, "Code", "a", full, 0),
+                window(2, "Chrome", "b", small, 1)
+            ]),
+            [2]
+        );
+        // The other way round, both show.
+        assert!(
+            covered(&[
+                window(2, "Chrome", "b", small, 0),
+                window(1, "Code", "a", full, 1)
+            ])
+            .is_empty()
+        );
+        // Two windows side by side together hide the one behind both.
+        let behind = vec![
+            window(1, "A", "", left, 0),
+            window(2, "B", "", right, 1),
+            window(3, "C", "", small, 2),
+        ];
+        assert_eq!(covered(&behind), [3]);
+        // A sliver showing (under 2%) still counts as covered; a strip of 10% doesn't.
+        let sliver = Rect::new(0.0, 0.0, 1920.0, 1060.0);
+        assert_eq!(
+            covered(&[window(1, "A", "", full, 0), window(2, "B", "", sliver, 1)]),
+            [2]
+        );
+        let strip = Rect::new(0.0, 0.0, 1920.0, 1170.0);
+        assert!(covered(&[window(1, "A", "", full, 0), window(2, "B", "", strip, 1)]).is_empty());
+        // Minimized windows and windows on other desktops don't hide anything, and aren't "covered".
+        let away = WindowInfo {
+            on_current_desktop: false,
+            ..window(1, "A", "", full, 0)
+        };
+        let min = WindowInfo {
+            minimized: true,
+            ..window(3, "C", "", full, 0)
+        };
+        assert!(covered(&[away, min, window(2, "B", "", small, 1)]).is_empty());
+    }
+
+    #[test]
+    fn rect_minus_leaves_the_parts_outside_the_cut() {
+        let r = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let total = |v: Vec<Rect>| v.iter().map(Rect::area).sum::<f64>();
+        assert_eq!(
+            total(r.minus(&Rect::new(25.0, 25.0, 50.0, 50.0))),
+            7500.0,
+            "a hole in the middle"
+        );
+        assert_eq!(
+            total(r.minus(&Rect::new(50.0, -10.0, 100.0, 200.0))),
+            5000.0,
+            "the right half"
+        );
+        assert!(
+            r.minus(&Rect::new(-1.0, -1.0, 200.0, 200.0)).is_empty(),
+            "all of it"
+        );
+        assert_eq!(r.minus(&Rect::new(200.0, 0.0, 10.0, 10.0)), [r], "nothing");
     }
 
     #[test]

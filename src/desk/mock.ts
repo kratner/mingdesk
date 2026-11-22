@@ -40,6 +40,7 @@ function home(): Desk {
     frame: LAPTOP,
     main: true,
     connected: true,
+    covered: [],
     desktops: desktops('LAPTOP', [[1, false, true]]),
     windows: [
       win('Mail', 'Inbox – 3 messages', { x: 240, y: 180, w: 1100, h: 760 }, { desktop: 1 }),
@@ -53,6 +54,7 @@ function home(): Desk {
     frame: MIDDLE,
     main: false,
     connected: true,
+    covered: [],
     desktops: desktops('MIDDLE', [
       [59, false, true],
       [70, true, false],
@@ -79,6 +81,7 @@ function home(): Desk {
     frame: RIGHT,
     main: false,
     connected: true,
+    covered: [],
     desktops: desktops('RIGHT', [
       [56, false, true],
       [74, true, false],
@@ -94,6 +97,8 @@ function home(): Desk {
       }),
     ],
   };
+  // The Safari window sits entirely behind the full-size Code window: the Desk view lists it as "behind".
+  middle.covered = middle.windows.filter((w) => w.app === 'Safari').map((w) => w.id);
   const displays = [laptop, middle, right];
   displays.forEach((d) =>
     d.windows.sort((a, b) => Number(a.minimized) - Number(b.minimized) || a.order - b.order),
@@ -114,7 +119,7 @@ function home(): Desk {
 function ghost(): Desk {
   const desk = home();
   const right = desk.displays[2];
-  desk.displays[2] = { ...right, connected: false, windows: [], desktops: [] };
+  desk.displays[2] = { ...right, connected: false, windows: [], desktops: [], covered: [] };
   return desk;
 }
 
@@ -128,6 +133,7 @@ function office(): Desk {
         frame: wide,
         main: true,
         connected: true,
+        covered: [],
         desktops: desktops('WIDE', [[1, false, true]]),
         windows: [
           win('Code', 'mingdesk — desk.rs', { x: 0, y: 30, w: 2560, h: 1410 }, { desktop: 1, focused: true }),

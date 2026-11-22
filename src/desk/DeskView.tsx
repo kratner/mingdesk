@@ -23,6 +23,8 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [view, setView] = useState<View>(FIT);
+  // A covered window whose "behind" chip is hovered: drawn as an outline where it sits.
+  const [peek, setPeek] = useState<number | null>(null);
   const names = desktopNames(desk);
 
   useEffect(() => {
@@ -105,6 +107,8 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
             .sort((a, b2) => b2.order - a.order); // back to front
           const away = d.desktops.filter((x) => !x.current);
           const minimized = d.windows.filter((w) => w.minimized);
+          const behind = d.covered.map((id) => d.windows.find((w) => w.id === id)).filter((w) => w !== undefined);
+          const peeking = behind.find((w) => w.id === peek);
           return (
             <Fragment key={d.id}>
             <div className="screen-label" style={{ ...labelAt(d.frame) }} onDoubleClick={() => zoomTo(d)}>
@@ -144,7 +148,19 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
                   </button>
                 );
               })}
-              {(away.length > 0 || minimized.length > 0) && (
+              {peeking && (
+                <div
+                  className="peek"
+                  style={{
+                    left: (peeking.frame.x - d.frame.x) * s,
+                    top: (peeking.frame.y - d.frame.y) * s,
+                    width: peeking.frame.w * s,
+                    height: peeking.frame.h * s,
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+              {(away.length > 0 || minimized.length > 0 || behind.length > 0) && (
                 <div className="screen-tray">
                   {away.map((x) => {
                     const first = d.windows.find((w) => w.desktop === x.id && !w.minimized);
@@ -161,6 +177,21 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
                       </button>
                     );
                   })}
+                  {behind.map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      className="chip behind"
+                      onClick={() => onAct({ kind: 'focus', window: w.id })}
+                      onMouseEnter={() => setPeek(w.id)}
+                      onMouseLeave={() => setPeek(null)}
+                      onFocus={() => setPeek(w.id)}
+                      onBlur={() => setPeek(null)}
+                      title={`Behind other windows: ${windowLabel(w)} — click to bring it forward`}
+                    >
+                      {w.app}: {windowLabel(w)}
+                    </button>
+                  ))}
                   {minimized.map((w) => (
                     <button key={w.id} type="button" className="chip min" onClick={() => onAct({ kind: 'focus', window: w.id })} title={`Restore ${windowLabel(w)}`}>
                       ▁ {windowLabel(w)}

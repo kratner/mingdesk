@@ -44,6 +44,8 @@ export interface DeskDisplay {
   connected: boolean;
   windows: WindowInfo[];
   desktops: Desktop[];
+  /** Windows on the desktop showing now that the ones in front cover almost entirely. */
+  covered: number[];
 }
 
 export interface SetupSummary {

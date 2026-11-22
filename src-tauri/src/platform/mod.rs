@@ -58,6 +58,36 @@ impl Rect {
         let h = self.bottom().min(other.bottom()) - self.y.max(other.y);
         if w > 0.0 && h > 0.0 { w * h } else { 0.0 }
     }
+    pub fn area(&self) -> f64 {
+        self.w.max(0.0) * self.h.max(0.0)
+    }
+    /// What's left of this rectangle with `cut` taken out: up to four pieces (above, below, left, right).
+    pub fn minus(&self, cut: &Rect) -> Vec<Rect> {
+        if self.overlap(cut) == 0.0 {
+            return vec![*self];
+        }
+        let top = cut.y.max(self.y);
+        let bottom = cut.bottom().min(self.bottom());
+        let mut pieces = Vec::new();
+        if top > self.y {
+            pieces.push(Rect::new(self.x, self.y, self.w, top - self.y));
+        }
+        if bottom < self.bottom() {
+            pieces.push(Rect::new(self.x, bottom, self.w, self.bottom() - bottom));
+        }
+        if cut.x > self.x {
+            pieces.push(Rect::new(self.x, top, cut.x - self.x, bottom - top));
+        }
+        if cut.right() < self.right() {
+            pieces.push(Rect::new(
+                cut.right(),
+                top,
+                self.right() - cut.right(),
+                bottom - top,
+            ));
+        }
+        pieces
+    }
     /// The smallest rectangle holding both.
     pub fn union(&self, other: &Rect) -> Rect {
         let x = self.x.min(other.x);

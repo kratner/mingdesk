@@ -177,6 +177,9 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 .win-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .screen-tray { position: absolute; left: 4px; right: 4px; bottom: 4px; z-index: 1001; display: flex; flex-wrap: wrap; gap: 4px; }
 .screen-tray .chip { font-size: 10px; padding: 1px 8px; max-width: 200px; background: var(--fo-surface); }
+.screen-tray .chip.behind::before { content: '◫ '; }
+.peek { position: absolute; z-index: 1000; border: 2px dashed var(--fo-gold); border-radius: 4px; background: rgb(201 162 74 / 0.08);
+  pointer-events: none; }
 .offscreen-note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 
 @media (max-width: 760px) { .filter { width: 100%; } .stretch { margin-left: 0; } }
