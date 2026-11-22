@@ -11,8 +11,9 @@
   under the pointer and outlines it; clicking a spot lists every window stacked there, front to back, then the
   rest of that display, and hovering a row outlines that window. A maximized window's outline no longer loses
   its right and bottom edges.
-- **Outlines–Solid slider** in the Desk view: outlines show where every window sits; solid shows only what's in
-  front, as before; anything between. Remembered on this Mac.
+- **Windows slider** in the toolbar (Desk view): from outlines, which show where every window sits, to solid,
+  which shows only what's in front, as before. Remembered on this Mac. The canvas's hint and Fit all now sit on
+  the canvas itself, Fit all only once you've zoomed in.
 
 ## 0.2.1 (2026-11-22): M1 preview
 

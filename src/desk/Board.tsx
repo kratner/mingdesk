@@ -1,7 +1,7 @@
 // The board once access is allowed: the setup bar, the List / Desk switch, and the live desk.
 
 import { useCallback, useEffect, useState } from 'react';
-import { DeskView } from './DeskView';
+import { DeskView, FILL_KEY, initialFill } from './DeskView';
 import { ListView, type Grouping } from './ListView';
 import { act, adoptSetup, forgetSetup, getDesk, renameSetup, watchDesk } from './api';
 import type { Action, Desk, SetupSummary } from './types';
@@ -19,6 +19,10 @@ function remembered<T extends string>(key: string, fallback: T, allowed: readonl
   } catch {
     return fallback;
   }
+}
+/** The Desk view's window fill, in words. */
+function fillName(v: number): string {
+  return v === 0 ? 'Outlines' : v === 100 ? 'Solid' : `${v}% solid`;
 }
 function remember(key: string, value: string) {
   try {
@@ -38,6 +42,7 @@ export function Board() {
   });
   const [grouping, setGrouping] = useState<Grouping>(() => remembered('mingdesk.grouping', 'display', ['display', 'app'] as const));
   const [filter, setFilter] = useState('');
+  const [fill, setFill] = useState(initialFill);
   const [density, setDensity] = useState<Density>(() => {
     const asked = new URLSearchParams(window.location.search).get('density') as Density | null;
     return asked && DENSITIES.includes(asked) ? asked : remembered('mingdesk.density', 'normal', DENSITIES);
@@ -157,6 +162,25 @@ export function Board() {
           />
           <span className="meta density-name">{DENSITY_LABEL[density]}</span>
         </label>
+        {view === 'desk' && (
+          <label className="density" title="Outlines show where every window sits; solid shows only what's in front">
+            <span className="meta">Windows</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={fill}
+              aria-valuetext={fillName(fill)}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setFill(v);
+                remember(FILL_KEY, String(v));
+              }}
+            />
+            <span className="meta fill-name">{fillName(fill)}</span>
+          </label>
+        )}
         <span className="meta stretch">
             {count} {count === 1 ? 'window' : 'windows'} on {connected} {connected === 1 ? 'display' : 'displays'}
           </span>
@@ -165,7 +189,7 @@ export function Board() {
       {view === 'list' ? (
         <ListView desk={desk} grouping={grouping} filter={filter} onAct={onAct} />
       ) : (
-        <DeskView desk={desk} onAct={onAct} />
+        <DeskView desk={desk} fill={fill} onAct={onAct} />
       )}
     </div>
   );

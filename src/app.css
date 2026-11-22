@@ -125,6 +125,7 @@ input:focus-visible { outline: 2px solid var(--fo-gold); outline-offset: 1px; }
 .density { display: inline-flex; align-items: center; gap: 8px; }
 .density input { width: 90px; accent-color: var(--fo-gold); }
 .density-name { min-width: 52px; }
+.fill-name { min-width: 72px; }
 .group { background: var(--fo-surface); border: 1px solid var(--fo-line); border-radius: var(--fo-radius-lg); padding: 12px 14px; }
 .group.ghost { border-style: dashed; background: transparent; }
 .group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -160,8 +161,6 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 
 /* Desk */
 .deskview { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
-.deskview-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.deskview-tools .hint { flex: 1; min-width: 200px; }
 .canvas { position: relative; flex: 1; min-height: 360px; overflow: hidden; border-radius: var(--fo-radius-lg); background: var(--fo-surface-2);
   border: 1px solid var(--fo-line); touch-action: none; }
 .screen { position: absolute; background: var(--fo-bg); border: 1px solid var(--fo-line); border-radius: 6px; overflow: hidden; }
@@ -219,3 +218,8 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 .offscreen-note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 
 @media (max-width: 760px) { .filter { width: 100%; } .stretch { margin-left: 0; } }
+
+/* Controls that sit on the Desk canvas, as on a map. */
+.canvas-hint { position: absolute; left: 12px; bottom: 8px; right: 110px; z-index: 5; font-size: 11px; color: var(--fo-muted); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.canvas-fit { position: absolute; right: 10px; top: 10px; z-index: 1500; background: var(--fo-surface); }
