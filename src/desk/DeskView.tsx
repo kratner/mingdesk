@@ -28,9 +28,13 @@ interface TrayItem {
   key: string;
   label: string;
   app: string | null;
+  /** The window's own title, with the app's name trimmed off the end, for the list. */
+  short: string;
   title: string;
   /** The window to focus; null for an empty desktop. */
   window: number | null;
+  /** Where the window sits, for the list's little map; null for a desktop. */
+  frame: Rect | null;
 }
 interface TrayGroup {
   kind: TrayKind;
@@ -38,21 +42,25 @@ interface TrayGroup {
   items: TrayItem[];
 }
 
-/** A display's hidden windows (or other desktops, or minimized windows) as a scrollable list. */
+/** A display's hidden windows (or other desktops, or minimized windows) as a scrollable list, grouped by app,
+ * each with a little map of where its window sits, since titles often repeat ("New Tab"). */
 function TrayList({
   group,
   title,
+  screen,
   onPeek,
   onPick,
 }: {
   group: TrayGroup;
   title: string;
+  screen: Rect;
   onPeek: (id: number | null) => void;
   onPick: (id: number) => void;
 }) {
   const [filter, setFilter] = useState('');
   const f = filter.trim().toLowerCase();
   const items = group.items.filter((it) => !f || it.label.toLowerCase().includes(f));
+  const apps = [...new Set(items.map((it) => it.app))];
   return (
     <>
       <div className="tray-list-head">{title}</div>
@@ -60,33 +68,79 @@ function TrayList({
         <input
           className="filter"
           type="search"
-          autoFocus
-          placeholder="Filter"
+          placeholder="Filter by title"
           aria-label="Filter this list"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
       )}
       <ul className="tray-list-rows" onMouseLeave={() => onPeek(null)}>
-        {items.map((it) => (
-          <li key={it.key}>
-            <button
-              type="button"
-              disabled={it.window === null}
-              title={it.title}
-              onMouseEnter={() => onPeek(it.window)}
-              onFocus={() => onPeek(it.window)}
-              onClick={() => it.window !== null && onPick(it.window)}
-            >
-              {it.app && <AppBadge app={it.app} />}
-              <span className="tray-list-label">{it.app ? it.label.slice(it.label.indexOf(':') + 2) : it.label}</span>
-            </button>
-          </li>
-        ))}
+        {apps.map((app) => {
+          const mine = items.filter((it) => it.app === app);
+          return (
+            <Fragment key={app ?? 'desktops'}>
+              {app && apps.length > 1 && (
+                <li className="tray-list-app">
+                  {app} <span className="count">{mine.length}</span>
+                </li>
+              )}
+              {mine.map((it) => (
+                <li key={it.key}>
+                  <button
+                    type="button"
+                    disabled={it.window === null}
+                    title={it.title}
+                    onMouseEnter={() => onPeek(it.window)}
+                    onFocus={() => onPeek(it.window)}
+                    onClick={() => it.window !== null && onPick(it.window)}
+                  >
+                    {it.app && <AppBadge app={it.app} />}
+                    <span className="tray-list-label">{it.short}</span>
+                    {it.frame && (
+                      <>
+                        <span className="tray-list-size">
+                          {Math.round(it.frame.w)}×{Math.round(it.frame.h)}
+                        </span>
+                        <MiniMap screen={screen} frame={it.frame} />
+                      </>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </Fragment>
+          );
+        })}
         {items.length === 0 && <li className="muted empty">No match.</li>}
       </ul>
     </>
   );
+}
+
+/** A display drawn small with one window in it: tells apart windows whose titles match. */
+function MiniMap({ screen, frame }: { screen: Rect; frame: Rect }) {
+  const W = 40;
+  const H = Math.max(14, Math.round((W * screen.h) / Math.max(screen.w, 1)));
+  const k = W / Math.max(screen.w, 1);
+  return (
+    <svg className="minimap" width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+      <rect x="0.5" y="0.5" width={W - 1} height={H - 1} rx="2" className="minimap-screen" />
+      <rect
+        x={Math.max(0, (frame.x - screen.x) * k)}
+        y={Math.max(0, (frame.y - screen.y) * k)}
+        width={Math.max(2, Math.min(W, frame.w * k))}
+        height={Math.max(2, Math.min(H, frame.h * k))}
+        rx="1"
+        className="minimap-window"
+      />
+    </svg>
+  );
+}
+
+/** "New Tab - Google Chrome - Keith (Work)" → "New Tab": the app is already shown. */
+function trimApp(title: string, app: string): string {
+  const at = title.indexOf(` - ${app}`);
+  const cut = at > 0 ? title.slice(0, at) : title;
+  return cut.trim() || title;
 }
 
 export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => void }) {
@@ -112,6 +166,8 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
               key: `x${x.id}`,
               label: `${x.fullScreen ? '⛶' : '▭'} ${names.get(x.id)}`,
               app: null,
+              short: `${x.fullScreen ? '⛶' : '▭'} ${names.get(x.id)}`,
+              frame: null,
               title: first ? `Go to ${names.get(x.id)}` : 'macOS gives no way to switch to an empty desktop',
               window: first?.id ?? null,
             };
@@ -128,6 +184,8 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
             key: `w${w.id}`,
             label: `◫ ${w.app}: ${windowLabel(w)}`,
             app: w.app,
+            short: trimApp(windowLabel(w), w.app),
+            frame: w.frame,
             title: `Behind other windows: ${windowLabel(w)}. Click to bring it forward.`,
             window: w.id,
           })),
@@ -138,7 +196,15 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
         items: d.windows
           .filter((w) => w.minimized)
           .sort(byApp)
-          .map((w) => ({ key: `w${w.id}`, label: `▁ ${w.app}: ${windowLabel(w)}`, app: w.app, title: `Restore ${windowLabel(w)}`, window: w.id })),
+          .map((w) => ({
+            key: `w${w.id}`,
+            label: `▁ ${w.app}: ${windowLabel(w)}`,
+            app: w.app,
+            short: trimApp(windowLabel(w), w.app),
+            title: `Restore ${windowLabel(w)}`,
+            window: w.id,
+            frame: w.frame,
+          })),
       },
     ];
     return groups.filter((g) => g.items.length > 0);
@@ -194,6 +260,8 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
     const el = box.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      // The tray list scrolls itself; the canvas pans and zooms everywhere else.
+      if ((e.target as Element).closest('.tray-list')) return;
       e.preventDefault();
       if (e.ctrlKey) {
         const rect = el.getBoundingClientRect();
@@ -342,9 +410,12 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
             const left = Math.max(8, Math.min((p.left as number) + 4, size.w - width - 8));
             const top = Math.max(8, Math.min((p.top as number) + 24, size.h - 220));
             return (
+              <>
+              <div className="scrim" aria-hidden="true" />
               <div ref={popRef} className="tray-list" style={{ left, top, width, maxHeight: size.h - top - 8 }} role="dialog" aria-label={`${d.name}: ${g.items.length} ${g.noun}`}>
                 <TrayList
                   group={g}
+                  screen={d.frame}
                   title={`${d.name} · ${g.items.length} ${g.noun}`}
                   onPeek={(id) => g.kind === 'behind' && setPeek(id)}
                   onPick={(id) => {
@@ -354,6 +425,7 @@ export function DeskView({ desk, onAct }: { desk: Desk; onAct: (a: Action) => vo
                   }}
                 />
               </div>
+              </>
             );
           })()}
       </div>
