@@ -118,7 +118,7 @@ pub fn displays() -> Vec<(CGDirectDisplayID, Display)> {
 
 fn uuid_of(id: CGDirectDisplayID) -> Option<String> {
     // SAFETY: create rule; null when the display has no UUID.
-    let uuid = unsafe { CGDisplayCreateUUIDFromDisplayID(id) };
+    let uuid = display_uuid(id);
     if uuid.is_null() {
         return None;
     }

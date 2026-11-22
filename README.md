@@ -3,9 +3,17 @@
 Every app window on your computer on one board: save working sets of windows into collections, search them,
 and bring them back the way they were. A Four Ounces tool, from the maker of MingTab. Mac first.
 
-**Status: M0, the skeleton.** MingDesk runs in the menu bar, opens an empty board and walks you through the Mac's
-Accessibility permission. Seeing your windows comes next (M1). The plan and milestones: [PLAN.md](PLAN.md);
-what changed: [CHANGELOG.md](CHANGELOG.md).
+**Status: M1 preview.** MingDesk shows every window on every display and desktop, live, as a list or as a picture
+of your screens, and focuses, minimizes or closes them. The ⌥Space switcher finishes M1; saving and restoring
+windows is M3. The plan and milestones: [PLAN.md](PLAN.md); what changed: [CHANGELOG.md](CHANGELOG.md).
+
+## Download
+
+Get the latest **MingDesk-…-universal.dmg** from [Releases](https://github.com/kratner/mingdesk/releases): one
+download for Apple silicon and Intel Macs, macOS 10.14 Mojave or later. Each release's notes say how to install
+it. MingDesk is signed with Four Ounces' own certificate rather than through Apple's paid programme, so the first
+time you open a new version macOS asks you to allow it (**Open Anyway** in System Settings → Privacy & Security,
+or Control-click → Open on macOS 14 and earlier).
 
 ## Build it
 
@@ -34,6 +42,14 @@ app: under `tauri dev` macOS charges the permission to the app that launched it 
 2. `npm install`, then `npx tauri build --bundles nsis` (installer) or `npm run tauri dev`.
 
 Windows needs no permission for window control; MingDesk's Windows window code is milestone M6.
+
+### Releases
+
+Bump the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, give it a section in
+CHANGELOG.md ("preview" in its heading makes a pre-release), commit, then tag `vX.Y.Z` and push the tag. The
+Release workflow (`.github/workflows/release.yml`) tests, builds the universal app, signs it with the "MingDesk Dev"
+certificate, makes the .dmg and publishes the release. Once per repo, give the workflow the certificate:
+`scripts/set-release-secrets.sh` says how.
 
 ### Tests
 

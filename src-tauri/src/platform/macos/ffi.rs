@@ -126,10 +126,24 @@ unsafe extern "C" {
     ) -> CFArrayRef;
 }
 
-#[link(name = "ColorSync", kind = "framework")]
 unsafe extern "C" {
-    /// The display's UUID, which outlives its CGDirectDisplayID across unplugging and sleep. Create rule.
-    pub fn CGDisplayCreateUUIDFromDisplayID(display: CGDirectDisplayID) -> CFTypeRef;
+    fn dlsym(handle: *mut c_void, symbol: *const std::ffi::c_char) -> *mut c_void;
+}
+
+/// The display's UUID, which outlives its CGDirectDisplayID across unplugging and sleep (create rule), or null.
+/// Looked up when called rather than linked: it lives in ColorSync.framework, which MingDesk mustn't depend on at
+/// launch, so a Mac without it (macOS Mojave, 10.14, is the oldest supported) still starts.
+pub fn display_uuid(display: CGDirectDisplayID) -> CFTypeRef {
+    type Create = unsafe extern "C" fn(CGDirectDisplayID) -> CFTypeRef;
+    static CREATE: std::sync::OnceLock<Option<Create>> = std::sync::OnceLock::new();
+    let create = CREATE.get_or_init(|| {
+        const RTLD_DEFAULT: *mut c_void = -2isize as *mut c_void;
+        // SAFETY: dlsym with a NUL-terminated name; a non-null result is this C function.
+        let f = unsafe { dlsym(RTLD_DEFAULT, c"CGDisplayCreateUUIDFromDisplayID".as_ptr()) };
+        (!f.is_null()).then(|| unsafe { std::mem::transmute::<*mut c_void, Create>(f) })
+    });
+    // SAFETY: the function takes a display id and returns a CFUUID or null.
+    create.map_or(std::ptr::null(), |f| unsafe { f(display) })
 }
 
 #[link(name = "CoreFoundation", kind = "framework")]

@@ -38,7 +38,9 @@ pub fn screen_names() -> HashMap<u32, String> {
                 continue;
             }
             let id: u32 = msg_send![number, unsignedIntValue];
-            if let Some(name) = string_of(msg_send![screen, localizedName]) {
+            // localizedName arrived in macOS 10.15; on Mojave the board numbers the displays instead.
+            let has_name: bool = msg_send![screen, respondsToSelector: objc2::sel!(localizedName)];
+            if has_name && let Some(name) = string_of(msg_send![screen, localizedName]) {
                 names.insert(id, name);
             }
         }
