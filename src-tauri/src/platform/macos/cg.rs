@@ -29,13 +29,21 @@ pub struct CgWindow {
 }
 
 pub fn windows() -> Vec<CgWindow> {
+    list(kCGWindowListOptionAll | kCGWindowListExcludeDesktopElements)
+}
+
+/// Stacking order of the windows on screen now, 0 = front-most. The full list (`windows`) is not in stacking
+/// order: on Keith's Mac it put Activity Monitor behind the Chrome window it was in front of.
+pub fn stacking() -> std::collections::HashMap<u32, u32> {
+    list(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements)
+        .into_iter()
+        .map(|w| (w.id, w.order))
+        .collect()
+}
+
+fn list(option: u32) -> Vec<CgWindow> {
     // SAFETY: plain C call; the result follows the create rule and may be null.
-    let raw = unsafe {
-        CGWindowListCopyWindowInfo(
-            kCGWindowListOptionAll | kCGWindowListExcludeDesktopElements,
-            kCGNullWindowID,
-        )
-    };
+    let raw = unsafe { CGWindowListCopyWindowInfo(option, kCGNullWindowID) };
     if raw.is_null() {
         return Vec::new();
     }

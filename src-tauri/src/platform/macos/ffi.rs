@@ -32,6 +32,8 @@ pub const kAXValueCGSizeType: u32 = 2;
 
 /// Every window, on screen or not, except the desktop picture and icons.
 pub const kCGWindowListOptionAll: u32 = 0;
+/// Only windows on screen now, documented to come front to back: the one list to take stacking order from.
+pub const kCGWindowListOptionOnScreenOnly: u32 = 1 << 0;
 pub const kCGWindowListExcludeDesktopElements: u32 = 1 << 4;
 pub const kCGNullWindowID: CGWindowID = 0;
 

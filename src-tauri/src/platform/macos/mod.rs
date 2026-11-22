@@ -38,6 +38,8 @@ const ACCESSIBILITY_SETTINGS: &str =
 
 /// Smallest window MingDesk lists; smaller layer-0 windows are helpers and slivers, not windows people use.
 const MIN_SIDE: f64 = 40.0;
+/// Where windows not on screen (other desktops, minimized) start in the stacking order.
+const STACK_REST: u32 = 100_000;
 /// Time allowed per app to reach its windows on other desktops during a snapshot.
 const REACH_BUDGET: Duration = Duration::from_millis(150);
 
@@ -90,6 +92,7 @@ pub fn read(sources: Sources) -> (Snapshot, Vec<Source>) {
         .collect();
 
     let all = cg::windows();
+    let stack = cg::stacking();
     let candidates: Vec<&cg::CgWindow> = all
         .iter()
         .filter(|w| {
@@ -161,15 +164,22 @@ pub fn read(sources: Sources) -> (Snapshot, Vec<Source>) {
                         *source,
                     ),
                     // Seen only by CoreGraphics: keep a regular app's window that is off this desktop or minimized;
-                    // a visible window Accessibility doesn't know is an invisible helper.
-                    None if info.regular && !w.onscreen && !parked(w) => (
-                        w.name.clone(),
-                        w.frame,
-                        false,
-                        false,
-                        false,
-                        Source::WindowListOnly,
-                    ),
+                    // one on the desktop showing now that Accessibility doesn't know is an invisible helper
+                    // (Chrome keeps a 403×84 one).
+                    None if info.regular
+                        && !w.onscreen
+                        && !parked(w)
+                        && !desktop_of[&w.id].is_some_and(|d| current.contains(&d)) =>
+                    {
+                        (
+                            w.name.clone(),
+                            w.frame,
+                            false,
+                            false,
+                            false,
+                            Source::WindowListOnly,
+                        )
+                    }
                     None => continue,
                 };
             let desktop = desktop_of[&w.id];
@@ -190,7 +200,8 @@ pub fn read(sources: Sources) -> (Snapshot, Vec<Source>) {
                 on_current_desktop,
                 desktop,
                 focused: is_focused,
-                order: w.order,
+                // On-screen windows in true stacking order; the rest after them.
+                order: stack.get(&w.id).copied().unwrap_or(STACK_REST + w.order),
             });
             found_by.push(source);
         }
