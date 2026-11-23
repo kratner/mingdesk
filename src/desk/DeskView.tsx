@@ -424,6 +424,44 @@ export function DeskView({
     return { left: x0, top: y0, width: Math.max(x1 - x0, 8), height: Math.max(y1 - y0, 8) };
   }
 
+  // Dragging moves around a zoomed desk, for a mouse, which has no two-finger scroll (Keith on Windows,
+  // 2026-11-23). Ctrl+drag or a middle-button drag work anywhere; a plain drag only from empty space, because in
+  // M2 a plain drag on a window moves the window. A drag isn't a click: it doesn't open the spot's list.
+  const pan = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  const justPanned = useRef(false);
+  const [panning, setPanning] = useState(false);
+  const startPan = (e: React.PointerEvent) => {
+    const sc = scroller.current;
+    if (zoom <= 1 || !sc || (e.button !== 0 && e.button !== 1)) return;
+    const t = e.target as Element;
+    if (t.closest('button')) return;
+    if (e.button === 0 && !e.ctrlKey && t.closest('.win')) return;
+    pan.current = { x: e.clientX, y: e.clientY, left: sc.scrollLeft, top: sc.scrollTop, moved: false };
+  };
+  const movePan = (e: React.PointerEvent) => {
+    const p = pan.current;
+    const sc = scroller.current;
+    if (!p || !sc) return;
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    if (!p.moved) {
+      if (Math.hypot(dx, dy) < 4) return; // a click that wobbled, not a drag
+      p.moved = true;
+      setPanning(true);
+      sc.setPointerCapture(e.pointerId);
+    }
+    sc.scrollLeft = p.left - dx;
+    sc.scrollTop = p.top - dy;
+  };
+  const endPan = (e: React.PointerEvent) => {
+    if (pan.current?.moved) {
+      justPanned.current = true;
+      scroller.current?.releasePointerCapture(e.pointerId);
+    }
+    pan.current = null;
+    setPanning(false);
+  };
+
   function zoomTo(d: DeskDisplay) {
     setStack(null);
     const z = clampZoom(Math.min((size.w - PAD * 2) / d.frame.w, (size.h - PAD * 2 - LABEL_H) / d.frame.h) / fit);
@@ -442,7 +480,7 @@ export function DeskView({
         {/* The canvas's own controls sit on it, as on a map: the hint while it's wide enough, Fit all once zoomed. */}
         {size.w >= 560 && (
           <div className="canvas-hint" aria-hidden="true">
-            Click a spot to list its windows · pinch or slide Zoom{zoom > 1 ? ' · scroll to move around' : ''} · double-click a display to fit it
+            Click a spot to list its windows · pinch or slide Zoom{zoom > 1 ? ' · scroll or Ctrl+drag to move around' : ''} · double-click a display to fit it
           </div>
         )}
         {zoom > 1 && (
@@ -451,8 +489,19 @@ export function DeskView({
           </button>
         )}
         <div
-          className={`canvas-scroll${zoom > 1 ? ' zoomed' : ''}`}
+          className={`canvas-scroll${zoom > 1 ? ' zoomed' : ''}${panning ? ' panning' : ''}`}
           ref={scroller}
+          onPointerDown={startPan}
+          onPointerMove={movePan}
+          onPointerUp={endPan}
+          onPointerCancel={endPan}
+          // The middle button would otherwise start the browser's own autoscroll.
+          onMouseDown={(e) => zoom > 1 && e.button === 1 && e.preventDefault()}
+          onClickCapture={(e) => {
+            if (!justPanned.current) return;
+            justPanned.current = false;
+            e.stopPropagation();
+          }}
           onScroll={() => {
             trackMiddle();
             // Lists and names pinned to a spot would drift off it: close them.

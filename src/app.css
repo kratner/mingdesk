@@ -179,6 +179,7 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 /* The drawing scrolls once zoomed; the hint, Fit all and the lists stay put on top of it. */
 .canvas-scroll { position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; }
 .canvas-scroll.zoomed { overflow: auto; }
+.canvas-scroll.panning, .canvas-scroll.panning * { cursor: grabbing !important; user-select: none; }
 .canvas-world { position: relative; }
 .screen { position: absolute; background: var(--fo-bg); border: 1px solid var(--fo-line); border-radius: 6px; overflow: hidden; }
 .screen.ghost { background: transparent; border: 2px dashed var(--fo-muted); opacity: 0.7; }
