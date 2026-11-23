@@ -109,7 +109,7 @@ export function Board() {
       )}
       <div className="board-head">
       <SetupBar
-          setup={desk.setup}
+          setup={desk.setup && { ...desk.setup, displayNames: leftToRight(desk, desk.setup.displayNames) }}
           others={desk.otherSetups}
           ghosts={ghosts.map((g) => g.name)}
           onAdopt={run(adoptSetup)}
@@ -299,4 +299,13 @@ function SetupBar({
       )}
     </div>
   );
+}
+
+/** The setup's display names in the order they sit on the desk, left to right (the stored order is by display id). */
+function leftToRight(desk: Desk, stored: string[]): string[] {
+  const here = desk.displays
+    .filter((d) => d.connected)
+    .sort((a, b) => a.frame.x - b.frame.x || a.frame.y - b.frame.y)
+    .map((d) => d.name);
+  return here.length === stored.length && here.every((n) => stored.includes(n)) ? here : stored;
 }

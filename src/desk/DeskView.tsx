@@ -6,7 +6,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { AppBadge } from './ListView';
-import { desktopNames, resolution, windowLabel } from './format';
+import { appAndTitle, desktopNames, resolution, windowLabel } from './format';
 import type { Action, Desk, DeskDisplay, Rect, WindowInfo } from './types';
 
 const PAD = 24;
@@ -213,7 +213,7 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
           .sort(byApp)
           .map((w) => ({
             key: `w${w.id}`,
-            label: `◫ ${w.app}: ${windowLabel(w)}`,
+            label: `◫ ${appAndTitle(w)}`,
             app: w.app,
             short: trimApp(windowLabel(w), w.app),
             frame: w.frame,
@@ -229,7 +229,7 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
           .sort(byApp)
           .map((w) => ({
             key: `w${w.id}`,
-            label: `▁ ${w.app}: ${windowLabel(w)}`,
+            label: `▁ ${appAndTitle(w)}`,
             app: w.app,
             short: trimApp(windowLabel(w), w.app),
             title: `Restore ${windowLabel(w)}`,
@@ -453,7 +453,7 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
                   style={{ left: Math.min(hot!.x + 12, d.frame.w * s - 40), top: hot!.y + 14 }}
                   aria-hidden="true"
                 >
-                  {hotWin.app}: {windowLabel(hotWin)}
+                  {appAndTitle(hotWin)}
                 </div>
               )}
               {peeking && (
@@ -540,7 +540,7 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
             const rest = front.filter((w) => !here.includes(w));
             const item = (w: WindowInfo, heading?: string): TrayItem => ({
               key: `w${w.id}`,
-              label: `${w.app}: ${windowLabel(w)}`,
+              label: `${appAndTitle(w)}`,
               app: w.app,
               short: `${w.app} · ${trimApp(windowLabel(w), w.app)}`,
               title: `Bring forward: ${windowLabel(w)}`,
@@ -585,7 +585,7 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
           <strong>Off-screen:</strong>{' '}
           {desk.offscreen.map((w) => (
             <button key={w.id} type="button" className="chip" onClick={() => onAct({ kind: 'focus', window: w.id })}>
-              {w.app}: {windowLabel(w)}
+              {appAndTitle(w)}
             </button>
           ))}
         </div>

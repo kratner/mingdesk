@@ -6,6 +6,12 @@ export function windowLabel(w: WindowInfo): string {
   return w.title.trim() || `${w.app} window`;
 }
 
+/** "App: title", or just "App" when the window is titled after its app ("Keychain Access: Keychain Access"). */
+export function appAndTitle(w: WindowInfo): string {
+  const t = windowLabel(w);
+  return t.toLowerCase() === w.app.trim().toLowerCase() ? w.app : `${w.app}: ${t}`;
+}
+
 export function resolution(d: DeskDisplay): string {
   return `${Math.round(d.frame.w)} × ${Math.round(d.frame.h)}`;
 }

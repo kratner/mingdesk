@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.5 (2026-11-22): M1 preview
+
+- A window titled after its app shows its name once ("Keychain Access", not "Keychain Access: Keychain Access").
+- The setup line lists your displays left to right, the way they sit on the desk.
+
 ## 0.2.4 (2026-11-22): M1 preview
 
 - On Mojave, the Density and Windows labels no longer touch their sliders.
