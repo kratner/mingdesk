@@ -8,9 +8,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Keeps the file small: past this size it starts over.
 const MAX_BYTES: u64 = 256 * 1024;
 
+#[cfg(not(target_os = "windows"))]
 fn path() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
     Some(PathBuf::from(home).join("Library/Logs/MingDesk/events.log"))
+}
+
+/// %LOCALAPPDATA%\MingDesk\Logs\events.log on Windows.
+#[cfg(target_os = "windows")]
+fn path() -> Option<PathBuf> {
+    let local = std::env::var_os("LOCALAPPDATA")?;
+    Some(PathBuf::from(local).join(r"MingDesk\Logs\events.log"))
 }
 
 pub fn event(what: &str) {

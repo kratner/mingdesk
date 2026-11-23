@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.7 (2026-11-23): M1 preview, now on Windows too
+
+- **MingDesk for Windows** (Windows 10 and 11, 64-bit): the first Windows build, an installer next to the .dmg.
+  - The List and Desk views show your desk live: every monitor by name, every window front to back, Store
+    apps by their own names, minimized windows, and windows on other virtual desktops (dimmed).
+  - Click a window to bring it to the front; minimize and close on hover; bring all of an app's windows forward.
+  - It lives in the tray: left-click opens the board, right-click for Quit. Closing the board hides it there.
+  - No permission to grant. The installer isn't code-signed yet, so SmartScreen asks first: **More info → Run
+    anyway**.
+  - Export desk saves the Windows version and PC model, and opens File Explorer at the file.
+- **Desk view with a mouse** (Windows and Mac): zoomed in, Ctrl+drag, a middle-button drag or a drag on empty
+  space moves around, and Ctrl+wheel zooms in smooth 20% steps around the pointer. Trackpads work as before.
+
 ## 0.2.6 (2026-11-22): M1 preview
 
 - Desk view: a Zoom slider in the toolbar. Zoomed in, the desk scrolls, with scrollbars, the wheel or two fingers.

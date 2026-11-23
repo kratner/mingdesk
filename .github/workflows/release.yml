@@ -1,5 +1,7 @@
 # Builds MingDesk for Apple silicon and Intel (one universal app, macOS 10.14+), wraps it in a .dmg and
-# publishes it on a GitHub Release.
+# publishes it on a GitHub Release. Alongside it, the `windows` job builds the Windows installer (NSIS, x64,
+# unsigned for now: SmartScreen warns, PLAN.md §5), and `publish-windows` adds it to that same release once the
+# macOS job has created it. The macOS job is the only one that creates the release, so the two can't race.
 #
 # Release: bump the version (package.json, src-tauri/Cargo.toml, src-tauri/tauri.conf.json), give it a section
 # in CHANGELOG.md, commit, tag vX.Y.Z and push the tag. This workflow does the rest; don't publish by hand.
@@ -119,3 +121,95 @@ jobs:
           path: |
             release/*.dmg
             release/NOTES.md
+
+  # The Windows installer, built while the Mac builds. Kept as a download on every run; a tag run hands it to
+  # publish-windows.
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Rust
+        run: |
+          rustup update stable
+          rustup default stable
+
+      - name: Install
+        run: npm ci
+
+      - name: Versions agree (and match the tag)
+        run: |
+          v=$(node -p "require('./package.json').version")
+          c=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+          t=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          [ "$v" = "$c" ] && [ "$v" = "$t" ] || { echo "package.json $v, Cargo.toml $c, tauri.conf.json $t"; exit 1; }
+          if [ "$TAGGED" = true ] && [ "v$v" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME but the version is $v"; exit 1
+          fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Tests
+        run: |
+          (cd src-tauri && cargo test)
+          npm run build
+
+      - name: Build the installer
+        run: npx tauri build --bundles nsis
+
+      - name: Check it
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          shopt -s nullglob
+          found=(src-tauri/target/release/bundle/nsis/*-setup.exe)
+          [ ${#found[@]} -eq 1 ] || fail "expected one NSIS installer, found ${#found[@]}"
+          size=$(stat -c %s "${found[0]}"); echo "${found[0]}: $size bytes"
+          [ "$size" -gt 1000000 ] || fail "the installer is suspiciously small"
+          mkdir -p release
+          cp "${found[0]}" "release/MingDesk-$VERSION-x64-setup.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mingdesk-windows
+          path: release/*.exe
+
+  # Adds the Windows installer, and how to install it, to the release the macOS job created. Runs only on a tag,
+  # and only after both builds succeeded.
+  publish-windows:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [release, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mingdesk-windows
+          path: release
+
+      - name: Add it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" release/*.exe
+          gh release view "$GITHUB_REF_NAME" --json body --jq .body > notes.md
+          cat >> notes.md <<'NOTES'
+
+          ## Install on Windows
+
+          1. Download **MingDesk-*-x64-setup.exe** below (Windows 10 or 11, 64-bit Intel or AMD).
+          2. Run it. Windows SmartScreen will say it protected your PC: MingDesk isn't code-signed yet. Click
+             **More info**, then **Run anyway**.
+          3. MingDesk starts in the tray (by the clock). Left-click its icon to open the board; right-click for Quit.
+             Windows asks for no permission: MingDesk can see and focus your windows straight away, and nothing
+             leaves your PC.
+          NOTES
+          gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
