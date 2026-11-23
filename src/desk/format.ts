@@ -16,6 +16,17 @@ export function resolution(d: DeskDisplay): string {
   return `${Math.round(d.frame.w)} × ${Math.round(d.frame.h)}`;
 }
 
+/** The OS the backend reports ("macOS", "Windows"), set once the board knows it, for the few words that differ. */
+let osName = 'macOS';
+export function setOsName(name: string): void {
+  if (name === 'Windows' || name === 'macOS') osName = name;
+}
+
+/** Why an empty desktop can't be clicked: neither OS lets an app switch desktops. */
+export function emptyDesktopHint(): string {
+  return `${osName} gives no way to switch to an empty desktop`;
+}
+
 const lastFullScreenNames = new Map<number, string>();
 
 /**

@@ -2,7 +2,7 @@
 // desktop showing now come first, then each other desktop or full-screen space, then minimized windows.
 // "By app" regroups the same rows by app. Dragging rows between displays and in the stack is M2.
 
-import { appHue, desktopNames, matches, resolution, windowLabel } from './format';
+import { appHue, desktopNames, emptyDesktopHint, matches, resolution, windowLabel } from './format';
 import { useFolds, type Folds } from './folds';
 import type { Action, Desk, DeskDisplay, WindowInfo } from './types';
 
@@ -149,7 +149,7 @@ function DisplaySection({
                   type="button"
                   className={`chip${x.current ? ' current' : ''}${x.fullScreen ? ' fs' : ''}`}
                   disabled={!first || x.current}
-                  title={first ? `Go to ${names.get(x.id)}` : 'macOS gives no way to switch to an empty desktop'}
+                  title={first ? `Go to ${names.get(x.id)}` : emptyDesktopHint()}
                   onClick={() => first && onAct({ kind: 'focus', window: first.id })}
                 >
                   {names.get(x.id)}

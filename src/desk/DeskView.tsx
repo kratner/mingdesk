@@ -7,7 +7,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppBadge } from './ListView';
-import { appAndTitle, desktopNames, resolution, windowLabel } from './format';
+import { appAndTitle, desktopNames, emptyDesktopHint, resolution, windowLabel } from './format';
 import type { Action, Desk, DeskDisplay, Rect, WindowInfo } from './types';
 
 const PAD = 24;
@@ -214,7 +214,7 @@ export function DeskView({
               app: null,
               short: `${x.fullScreen ? '⛶' : '▭'} ${names.get(x.id)}`,
               frame: null,
-              title: first ? `Go to ${names.get(x.id)}` : 'macOS gives no way to switch to an empty desktop',
+              title: first ? `Go to ${names.get(x.id)}` : emptyDesktopHint(),
               window: first?.id ?? null,
             };
           }),

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { FourOuncesMark } from './FourOuncesMark';
 import { Board } from './desk/Board';
 import { exportDesk, inTauri } from './desk/api';
+import { setOsName } from './desk/format';
 
 type Permission = 'granted' | 'missing' | 'notNeeded';
 interface Status {
@@ -26,6 +27,7 @@ export default function App() {
       const next = inTauri
         ? await invoke<Status>('status')
         : { permission: 'granted' as const, platform: 'browser preview, sample desk', version: 'dev' };
+      setOsName(next.platform);
       setStatus((prev) => {
         if (prev?.permission === 'missing' && next.permission === 'granted') setJustGranted(true);
         return next;
@@ -69,7 +71,7 @@ export default function App() {
     setError(null);
     try {
       const path = await exportDesk();
-      setExported(`Saved ${path.split('/').pop()} to Downloads`);
+      setExported(`Saved ${path.split(/[\\/]/).pop()} to Downloads`);
       window.setTimeout(() => setExported(null), 6000);
     } catch (e) {
       setError(String(e));
