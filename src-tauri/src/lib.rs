@@ -373,7 +373,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage::<PlatformState>(platform::current())
         .manage::<KnownState>(Mutex::new(desk::Known::default()))
@@ -424,10 +424,13 @@ pub fn run() {
                 let _ = window.app_handle().hide();
                 log::event("board closed (board hidden, app hidden)");
             }
-        })
-        // About, Hide, Quit (⌘Q), Edit (copy and paste in the board's fields), Window. Settings… joins with the
-        // hotkey setting (M1 step 5).
-        .menu(tauri::menu::Menu::default)
+        });
+    // About, Hide, Quit (⌘Q), Edit (copy and paste in the board's fields), Window. Settings… joins with the
+    // hotkey setting (M1 step 5). Mac only: on Windows a menu bar would sit inside the board's window, and Windows
+    // apps reach Quit from the tray.
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(tauri::menu::Menu::default);
+    builder
         .build(tauri::generate_context!())
         .expect("error while starting MingDesk")
         .run(|_app, _event| {
