@@ -15,6 +15,9 @@ mod macos;
 mod other;
 #[cfg(target_os = "windows")]
 mod windows;
+/// This PC's Windows version and model, for Export desk.
+#[cfg(target_os = "windows")]
+pub use self::windows::{model as windows_model, os_version as windows_version};
 
 /// Whether MingDesk may see and control other apps' windows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

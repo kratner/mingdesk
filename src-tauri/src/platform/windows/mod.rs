@@ -14,7 +14,10 @@ mod desktops;
 mod displays;
 mod list;
 mod rules;
+mod system;
 mod watch;
+
+pub use system::{model, os_version};
 
 use super::{Desktop, Permission, Platform, Sink, Snapshot, WindowInfo};
 use ::windows::Win32::UI::HiDpi::{
@@ -197,6 +200,7 @@ mod probe {
         let started = Instant::now();
         let snap = read();
         println!("snapshot took {:?}", started.elapsed());
+        println!("os: {:?}\nmodel: {:?}", os_version(), model());
         println!("\nDisplays:");
         for d in &snap.displays {
             println!("  {} | {} | {:?} | main={}", d.name, d.id, d.frame, d.main);
