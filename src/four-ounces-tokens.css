@@ -1,4 +1,4 @@
-/* Copied from kratner/four-ounces-brand tokens/tokens.css (kit v1, afded8f). Products copy, never redefine:
+/* Copied from kratner/four-ounces-brand tokens/tokens.css (kit v1, 79e8cfc). Products copy, never redefine:
    change the kit and copy again. */
 
 :root {
@@ -21,6 +21,8 @@
   --fo-success: #12805C;
   --fo-danger: #B3261E;
   --fo-warning: #7A5C14;
+  --fo-scroll-thumb: #5F5A5159;
+  --fo-scroll-thumb-hover: #C9A24ACC;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,6 +42,8 @@
     --fo-success: #4CC79A;
     --fo-danger: #F28B82;
     --fo-warning: #C9A24A;
+    --fo-scroll-thumb: #9A948A4D;
+    --fo-scroll-thumb-hover: #C9A24ACC;
   }
 }
 
@@ -59,4 +63,6 @@
   --fo-success: #4CC79A;
   --fo-danger: #F28B82;
   --fo-warning: #C9A24A;
+  --fo-scroll-thumb: #9A948A4D;
+  --fo-scroll-thumb-hover: #C9A24ACC;
 }

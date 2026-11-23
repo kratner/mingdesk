@@ -1,5 +1,6 @@
 /* MingDesk board. Colours and type come from the Four Ounces kit (four-ounces-tokens.css), as in MingTab. */
 @import './four-ounces-tokens.css';
+@import './four-ounces-scrollbars.css';
 
 /* Bundled OFL fonts (licences in /fonts/licenses), so nothing loads from the network. */
 @font-face { font-family: 'Inter'; src: url('/fonts/Inter.latin.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
@@ -7,22 +8,6 @@
 @font-face { font-family: 'JetBrains Mono'; src: url('/fonts/JetBrainsMono.latin.woff2') format('woff2'); font-weight: 100 800; font-display: swap; }
 
 * { box-sizing: border-box; }
-
-/* Scrollbars: a slim rounded thumb on no track, quiet until hovered, then gold. Every scrolling area uses them.
-   (Candidates for the Four Ounces kit, so MingShot and later apps match; until then they're MingDesk's own.)
-   Only the ::-webkit- rules, not scrollbar-color: Chrome ignores these once that's set, and Mojave's WebKit has
-   only these. Firefox gets the standard pair below. */
-:root { --md-scroll-thumb: rgba(95, 90, 81, 0.35); --md-scroll-thumb-hover: rgba(201, 162, 74, 0.8); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) { --md-scroll-thumb: rgba(154, 148, 138, 0.3); }
-}
-:root[data-theme='dark'] { --md-scroll-thumb: rgba(154, 148, 138, 0.3); }
-::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
-::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
-::-webkit-scrollbar-thumb { background-color: var(--md-scroll-thumb); background-clip: padding-box; border: 2px solid transparent;
-  border-radius: 6px; min-width: 32px; min-height: 32px; }
-::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background-color: var(--md-scroll-thumb-hover); }
-@supports (-moz-appearance: none) { * { scrollbar-width: thin; scrollbar-color: var(--md-scroll-thumb) transparent; } }
 html, body, #root { height: 100%; }
 body {
   margin: 0;
