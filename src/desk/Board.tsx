@@ -1,7 +1,7 @@
 // The board once access is allowed: the setup bar, the List / Desk switch, and the live desk.
 
 import { useCallback, useEffect, useState } from 'react';
-import { DeskView, FILL_KEY, initialFill } from './DeskView';
+import { DeskView, FILL_KEY, MAX_ZOOM, clampZoom, initialFill } from './DeskView';
 import { ListView, type Grouping } from './ListView';
 import { act, adoptSetup, forgetSetup, getDesk, renameSetup, watchDesk } from './api';
 import type { Action, Desk, SetupSummary } from './types';
@@ -20,6 +20,11 @@ function remembered<T extends string>(key: string, fallback: T, allowed: readonl
     return fallback;
   }
 }
+/** The Desk view's zoom, in words. */
+function zoomName(z: number): string {
+  return z <= 1.005 ? 'Whole desk' : `${Math.round(z * 100)}%`;
+}
+
 /** The Desk view's window fill, in words. */
 function fillName(v: number): string {
   return v === 0 ? 'Outlines' : v === 100 ? 'Solid' : `${v}% solid`;
@@ -43,6 +48,8 @@ export function Board() {
   const [grouping, setGrouping] = useState<Grouping>(() => remembered('mingdesk.grouping', 'display', ['display', 'app'] as const));
   const [filter, setFilter] = useState('');
   const [fill, setFill] = useState(initialFill);
+  // The Desk view's zoom: 1 fits the whole desk. Not remembered: the desk opens whole.
+  const [zoom, setZoom] = useState(() => clampZoom(Number(new URLSearchParams(window.location.search).get('zoom')) || 1));
   const [density, setDensity] = useState<Density>(() => {
     const asked = new URLSearchParams(window.location.search).get('density') as Density | null;
     return asked && DENSITIES.includes(asked) ? asked : remembered('mingdesk.density', 'normal', DENSITIES);
@@ -181,6 +188,22 @@ export function Board() {
             <span className="meta fill-name">{fillName(fill)}</span>
           </label>
         )}
+        {view === 'desk' && (
+          <label className="density" title="Zoom in on the desk; scroll to move around (pinch works too)">
+            <span className="meta">Zoom</span>
+            {/* Logarithmic, so each step looks the same size: 0 is the whole desk, 100 is MAX_ZOOM. */}
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round((100 * Math.log(zoom)) / Math.log(MAX_ZOOM))}
+              aria-valuetext={zoomName(zoom)}
+              onChange={(e) => setZoom(clampZoom(MAX_ZOOM ** (Number(e.target.value) / 100)))}
+            />
+            <span className="meta zoom-name">{zoomName(zoom)}</span>
+          </label>
+        )}
         <span className="meta stretch">
             {count} {count === 1 ? 'window' : 'windows'} on {connected} {connected === 1 ? 'display' : 'displays'}
           </span>
@@ -189,7 +212,7 @@ export function Board() {
       {view === 'list' ? (
         <ListView desk={desk} grouping={grouping} filter={filter} onAct={onAct} />
       ) : (
-        <DeskView desk={desk} fill={fill} onAct={onAct} />
+        <DeskView desk={desk} fill={fill} zoom={zoom} onZoom={setZoom} onAct={onAct} />
       )}
     </div>
   );

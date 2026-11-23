@@ -1,10 +1,11 @@
 // The Desk view (PLAN.md §8): every display in its real arrangement, scaled to fit, with the windows of the
 // desktop showing on each drawn in stacking order, as outlines. A window's title shows only where its top-left
 // corner isn't covered, so labels never pile up; hovering names the window under the pointer, and a click lists
-// every window stacked at that spot, front to back. Trackpad first: pinch to zoom, two-finger scroll to pan,
-// double-click a display to zoom to it, Fit all to go back. Moving and resizing windows here is M2.
+// every window stacked at that spot, front to back. Zoom with the toolbar's Zoom slider, a pinch, or ⌘+/⌘−; once
+// zoomed the desk scrolls (scrollbars, wheel, two-finger scroll); double-click a display to zoom to it, Fit all to
+// go back. Moving and resizing windows here is M2.
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppBadge } from './ListView';
 import { appAndTitle, desktopNames, resolution, windowLabel } from './format';
 import type { Action, Desk, DeskDisplay, Rect, WindowInfo } from './types';
@@ -12,14 +13,15 @@ import type { Action, Desk, DeskDisplay, Rect, WindowInfo } from './types';
 const PAD = 24;
 /** Room above each display for its name. */
 const LABEL_H = 20;
-const MAX_ZOOM = 8;
-
-interface View {
-  zoom: number;
-  x: number;
-  y: number;
+export const MAX_ZOOM = 8;
+export const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(1, z));
+/** A desk point and where in the viewport it should stay when the zoom changes. */
+interface Anchor {
+  dx: number;
+  dy: number;
+  px: number;
+  py: number;
 }
-const FIT: View = { zoom: 1, x: 0, y: 0 };
 /** Up to this many of a kind show as chips on the display; more collapse to one count chip with a list. */
 const TRAY_SINGLES = 2;
 /** Past this many entries the tray list gets a filter box. */
@@ -170,10 +172,23 @@ function trimApp(title: string, app: string): string {
   return cut.trim() || title;
 }
 
-export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAct: (a: Action) => void }) {
+export function DeskView({
+  desk,
+  fill,
+  zoom,
+  onZoom,
+  onAct,
+}: {
+  desk: Desk;
+  fill: number;
+  /** 1 fits the whole desk; up to MAX_ZOOM. Owned by the board, whose toolbar has the Zoom slider. */
+  zoom: number;
+  onZoom: (z: number) => void;
+  onAct: (a: Action) => void;
+}) {
   const box = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 500 });
-  const [view, setView] = useState<View>(FIT);
   // A covered window whose "behind" chip or list entry is hovered: drawn as an outline where it sits.
   const [peek, setPeek] = useState<number | null>(null);
   // The tray list open, if any: one display's other desktops, hidden windows or minimized windows.
@@ -281,10 +296,12 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
 
   const b = desk.bounds;
   const fit = Math.min((size.w - PAD * 2) / Math.max(b.w, 1), (size.h - PAD * 2 - LABEL_H) / Math.max(b.h, 1));
-  const s = fit * view.zoom;
-  // Centre the whole desk, then apply the user's pan.
-  const ox = (size.w - b.w * fit) / 2 + view.x;
-  const oy = (size.h - b.h * fit + LABEL_H) / 2 + view.y;
+  const s = fit * zoom;
+  // Zoomed in, the drawing is bigger than the canvas and scrolls; it's centred while it fits.
+  const worldW = Math.max(size.w, b.w * s + PAD * 2);
+  const worldH = Math.max(size.h, b.h * s + PAD * 2 + LABEL_H);
+  const ox = (worldW - b.w * s) / 2;
+  const oy = (worldH - b.h * s + LABEL_H) / 2;
   const place = (r: Rect): React.CSSProperties => ({
     left: ox + (r.x - b.x) * s,
     top: oy + (r.y - b.y) * s,
@@ -298,34 +315,79 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
     return { left: p.left, top: (p.top as number) - LABEL_H, width: p.width };
   };
 
-  // Pinch (ctrl+wheel in WebKit) zooms around the pointer; two-finger scroll pans.
+  // Zooming keeps a point of the desk still: the one under the pointer for a pinch, the display's centre for a
+  // double-click, otherwise whatever is in the middle of the canvas. The middle is tracked as the canvas scrolls
+  // because zooming out shrinks the drawing, and the browser clamps the scroll before we could read it.
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const geo = useRef({ s, ox, oy, mid: { dx: 0, dy: 0 } });
+  const pending = useRef<Anchor | null>(null);
+  const deskAt = (px: number, py: number) => {
+    const sc = scroller.current!;
+    const g = geo.current;
+    return { dx: (sc.scrollLeft + px - g.ox) / g.s, dy: (sc.scrollTop + py - g.oy) / g.s };
+  };
+  const trackMiddle = () => scroller.current && (geo.current.mid = deskAt(size.w / 2, size.h / 2));
+  const zoomAround = (z: number, px: number, py: number) => {
+    pending.current = { ...deskAt(px, py), px, py };
+    onZoom(clampZoom(z));
+  };
+  useLayoutEffect(() => {
+    const sc = scroller.current;
+    if (!sc) return;
+    const a = pending.current ?? (geo.current.s !== s ? { ...geo.current.mid, px: size.w / 2, py: size.h / 2 } : null);
+    pending.current = null;
+    if (a) {
+      sc.scrollLeft = a.dx * s + ox - a.px;
+      sc.scrollTop = a.dy * s + oy - a.py;
+    }
+    geo.current = { s, ox, oy, mid: geo.current.mid };
+    trackMiddle();
+  });
+
+  // A pinch zooms around the pointer: newer WebKit sends it as ctrl+wheel, older WebKit (Mojave's) only as
+  // Safari's own gesture events. Plain scrolling is left to the browser.
   useEffect(() => {
     const el = box.current;
     if (!el) return;
+    let start = 1;
+    let pinching = false;
+    const at = (e: { clientX: number; clientY: number }) => {
+      const r = el.getBoundingClientRect();
+      return [e.clientX - r.left, e.clientY - r.top] as const;
+    };
     const onWheel = (e: WheelEvent) => {
-      // The tray list scrolls itself; the canvas pans and zooms everywhere else.
-      if ((e.target as Element).closest('.tray-list')) return;
+      if (!e.ctrlKey || (e.target as Element).closest('.tray-list')) return;
       e.preventDefault();
-      if (e.ctrlKey) {
-        const rect = el.getBoundingClientRect();
-        const px = e.clientX - rect.left;
-        const py = e.clientY - rect.top;
-        setView((v) => {
-          const zoom = Math.min(MAX_ZOOM, Math.max(1, v.zoom * Math.exp(-e.deltaY / 100)));
-          const k = zoom / v.zoom;
-          if (zoom === 1) return FIT;
-          // Keep the point under the pointer where it is.
-          const cx = (size.w - b.w * fit) / 2;
-          const cy = (size.h - b.h * fit) / 2;
-          return { zoom, x: px - cx - (px - cx - v.x) * k, y: py - cy - (py - cy - v.y) * k };
-        });
-      } else {
-        setView((v) => (v.zoom === 1 ? v : { ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
-      }
+      if (pinching) return;
+      zoomAround(zoomRef.current * Math.exp(-e.deltaY / 100), ...at(e));
+    };
+    type Gesture = Event & { scale: number; clientX: number; clientY: number };
+    const onStart = (e: Event) => {
+      e.preventDefault();
+      pinching = true;
+      start = zoomRef.current;
+    };
+    const onChange = (e: Event) => {
+      e.preventDefault();
+      const g = e as Gesture;
+      zoomAround(start * g.scale, ...at(g));
+    };
+    const onEnd = (e: Event) => {
+      e.preventDefault();
+      pinching = false;
     };
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [size, b.w, b.h, fit]);
+    el.addEventListener('gesturestart', onStart);
+    el.addEventListener('gesturechange', onChange);
+    el.addEventListener('gestureend', onEnd);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('gesturestart', onStart);
+      el.removeEventListener('gesturechange', onChange);
+      el.removeEventListener('gestureend', onEnd);
+    };
+  });
 
   /** The windows drawn on a display, front to back. */
   const drawnOn = (d: DeskDisplay) =>
@@ -364,29 +426,42 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
 
   function zoomTo(d: DeskDisplay) {
     setStack(null);
-    const zoom = Math.min(MAX_ZOOM, Math.min((size.w - PAD * 2) / d.frame.w, (size.h - PAD * 2) / d.frame.h) / fit);
-    const cx = (size.w - b.w * fit) / 2;
-    const cy = (size.h - b.h * fit) / 2;
-    // Put the display's centre in the middle of the box.
-    const dx = (d.frame.x - b.x + d.frame.w / 2) * fit * zoom;
-    const dy = (d.frame.y - b.y + d.frame.h / 2) * fit * zoom;
-    setView({ zoom, x: size.w / 2 - cx - dx, y: size.h / 2 - cy - dy });
+    const z = clampZoom(Math.min((size.w - PAD * 2) / d.frame.w, (size.h - PAD * 2 - LABEL_H) / d.frame.h) / fit);
+    // Put the display's centre in the middle of the canvas.
+    pending.current = { dx: d.frame.x - b.x + d.frame.w / 2, dy: d.frame.y - b.y + d.frame.h / 2, px: size.w / 2, py: size.h / 2 };
+    onZoom(z);
   }
 
   return (
     <div className="deskview">
-      <div className="canvas" ref={box} style={{ '--win-fill': fill / 100 } as React.CSSProperties} onKeyDown={(e) => e.key === '0' && setView(FIT)}>
+      <div className={`canvas${zoom > 1 ? ' zoomed' : ''}`} ref={box} style={{ '--win-fill': fill / 100 } as React.CSSProperties} onKeyDown={(e) => {
+        if (e.key === '0') onZoom(1);
+        else if (e.key === '+' || e.key === '=') zoomAround(zoomRef.current * 1.25, size.w / 2, size.h / 2);
+        else if (e.key === '-') zoomAround(zoomRef.current / 1.25, size.w / 2, size.h / 2);
+      }}>
         {/* The canvas's own controls sit on it, as on a map: the hint while it's wide enough, Fit all once zoomed. */}
         {size.w >= 560 && (
           <div className="canvas-hint" aria-hidden="true">
-            Click a spot to list its windows · pinch to zoom{view.zoom > 1 ? ' · two-finger scroll to pan' : ''} · double-click a display to fit it
+            Click a spot to list its windows · pinch or slide Zoom{zoom > 1 ? ' · scroll to move around' : ''} · double-click a display to fit it
           </div>
         )}
-        {view.zoom > 1 && (
-          <button type="button" className="small canvas-fit" onClick={() => setView(FIT)}>
+        {zoom > 1 && (
+          <button type="button" className="small canvas-fit" onClick={() => onZoom(1)}>
             Fit all
           </button>
         )}
+        <div
+          className={`canvas-scroll${zoom > 1 ? ' zoomed' : ''}`}
+          ref={scroller}
+          onScroll={() => {
+            trackMiddle();
+            // Lists and names pinned to a spot would drift off it: close them.
+            setHot(null);
+            setOpen(null);
+            setStack(null);
+          }}
+        >
+        <div className="canvas-world" style={{ width: worldW, height: worldH }}>
         {desk.displays.map((d) => {
           const current = d.desktops.find((x) => x.current);
           const front = drawnOn(d);
@@ -503,15 +578,20 @@ export function DeskView({ desk, fill, onAct }: { desk: Desk; fill: number; onAc
             </Fragment>
           );
         })}
+        </div>
+        </div>
         {open &&
           (() => {
             const d = desk.displays.find((x) => x.id === open.display);
             const g = d && trayFor(d).find((x) => x.kind === open.kind);
             if (!d || !g) return null;
+            // The list sits over the canvas, not in the scrolling drawing: place it where the display shows now.
             const p = place(d.frame);
+            const sx = scroller.current?.scrollLeft ?? 0;
+            const sy = scroller.current?.scrollTop ?? 0;
             const width = Math.min(340, size.w - 16);
-            const left = Math.max(8, Math.min((p.left as number) + 4, size.w - width - 8));
-            const top = Math.max(8, Math.min((p.top as number) + 24, size.h - 220));
+            const left = Math.max(8, Math.min((p.left as number) - sx + 4, size.w - width - 8));
+            const top = Math.max(8, Math.min((p.top as number) - sy + 24, size.h - 220));
             return (
               <>
               <div className="scrim" aria-hidden="true" />
