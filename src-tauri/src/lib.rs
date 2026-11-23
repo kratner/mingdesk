@@ -388,9 +388,11 @@ pub fn run() {
         .menu(tauri::menu::Menu::default)
         .build(tauri::generate_context!())
         .expect("error while starting MingDesk")
-        .run(|app, event| {
+        .run(|_app, _event| {
             // A click on the Dock icon shows the board, whether or not it was open.
-            if let tauri::RunEvent::Reopen { .. } = event {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                let app = _app;
                 log::event("dock icon clicked (reopen)");
                 show_board(app);
             }
