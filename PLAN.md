@@ -5,6 +5,7 @@ collections and spaces, searched, and brought back the way it was. Mac first; Wi
 
 Created 2026-11-08. **M0 built 2026-11-08** (see CHANGELOG.md); M1 next. **Revised 2026-11-20:** the board's
 two views, List and Desk (§8), how MingDesk handles several displays (§9), and arranging moved up to M2 (§6).
+**Windows started 2026-11-23,** ahead of its M6 slot: M1 on Windows first (§2, §6; planning #27).
 
 **Name:** MingDesk, from 明窗淨几 (*míng chuāng jìng jī*), "a bright window and a clean desk": the classical
 picture of a tidy place to work. MingTab keeps the tab bar clear; MingDesk keeps the desk clear. A Four Ounces
@@ -68,13 +69,39 @@ possible differs a lot by platform, and it decides the order of work.
 
 ### Windows (second)
 
-- Win32 (`EnumWindows`, `GetWindowText`, `SetWindowPlacement`, `ShowWindow`) gives everything MingDesk needs to
-  list, place, focus, minimize and close top-level windows; no permission prompt. UI Automation exposes tabs in
-  some apps (Explorer, Windows Terminal, Edge).
+Started 2026-11-23 (§7.16), ahead of its M6 slot; M1 runs on Windows 11 (src-tauri/src/platform/windows/).
+
+- **No permission:** Win32 lets any app list, focus, minimize and close other apps' top-level windows, so the
+  board skips onboarding. UI Automation exposes tabs in some apps (Explorer, Windows Terminal, Edge), for M5.
+- **Which windows are listed:** `EnumWindows` walks top-level windows front to back, which is the stacking order.
+  A window counts when it's visible, has no owner, isn't a tool window, has a title (or asks for a taskbar
+  button), and isn't the shell (`Progman`, `WorkerW`, the taskbars): roughly what the taskbar and Alt+Tab show.
+  Cloaked windows (DWM isn't drawing them: suspended Store apps, the shell's hidden panels) are left out, except
+  one on another virtual desktop, which Windows cloaks too. Its frame is DWM's extended frame bounds, without the
+  invisible resize borders `GetWindowRect` includes; a minimized window's frame is where it will come back.
+- **Apps:** the exe path is the app id; the name is the exe's FileDescription ("Windows Explorer", "Google
+  Chrome"), else its file name. Store apps run inside ApplicationFrameHost.exe: the app is read from the
+  CoreWindow inside the frame.
+- **Actions:** focus restores a minimized window and brings it to the front. Windows lets only the app the user
+  is in hand over focus, so MingDesk counts as having had the last input (a zero mouse input) and, failing
+  that, joins the foreground window's input queue (`AttachThreadInput`); it works from the tray and from a
+  background process. Minimize with `ShowWindowAsync`, close by posting `WM_CLOSE` (as the close button does; the
+  app may ask to save). Neither waits on a hung app.
+- **Live:** WinEvent hooks (out of context, nothing injected into other apps) for windows opening, closing,
+  moving, retitling, minimizing, focus and cloaking, which is what a desktop switch looks like from outside;
+  `WM_DISPLAYCHANGE` and `WM_SETTINGCHANGE` for displays and the taskbar. live.rs lets bursts settle, as on the
+  Mac.
+- **The app:** a tray icon (left-click opens the board, right-click for Quit); closing the board hides it to the
+  tray; no menu bar. The switcher's default hotkey is Ctrl+Alt+Space (§7.17): Alt+Space opens every window's
+  system menu and is PowerToys Run's.
 - Documents: the process's command line and the window title usually identify them; less reliable than the Mac's
   `AXDocument`.
-- Virtual desktops: Windows only lets an app move its own windows between desktops through public API, so
-  MingDesk records the display and leaves desktops alone, as on the Mac.
+- **Virtual desktops:** which desktop a window is on, and whether it's the one showing, are public
+  (`IVirtualDesktopManager`). The list of desktops and their order isn't: MingDesk reads the order from the
+  registry key Explorer keeps it in (`VirtualDesktopIDs`, read-only, unchanged since Windows 10), falling back
+  to the order windows are first seen in. Windows only lets an app move its *own* windows between desktops, so
+  MingDesk never does. A Windows desktop spans every display (a Mac's belongs to one), so the board lists each
+  desktop under every display with the same number.
 
 ### Linux (third)
 
@@ -126,7 +153,9 @@ possible differs a lot by platform, and it decides the order of work.
   warnings, and macOS ties the Accessibility permission to the app's signature, so an unsigned build loses the
   permission on every update. Development builds can run unsigned on Keith's Mac meanwhile.
 - **Windows:** an installer from GitHub Releases; code signing optional at first (SmartScreen warns until it's
-  signed or has reputation).
+  signed or has reputation). Built: an NSIS installer for x64 (`MingDesk-<version>-x64-setup.exe`), unsigned,
+  made by the release workflow's `windows` job and added to the same release as the .dmg. An ARM64 installer
+  (Surface Pro X / Pro 11) only if Keith's Surface needs it.
 - **Linux:** AppImage / `.deb`.
 - Repo: <https://github.com/kratner/mingdesk> (pushed over SSH; this machine's `gh` is the work account).
 
@@ -144,7 +173,7 @@ Each milestone ends with tests that ran and what Keith checks by hand, as in Min
 | **M3** | **Save and restore.** Save a window, an app's windows, a selection, or the whole desk as a collection. Open a collection: launch apps, reopen documents, place windows; report anything that couldn't come back. Cope with a changed monitor setup. Remember where windows were in each display setup (§9) and, when a setup comes back (redocking), ask before putting them back (§7.11). Queued moves to a disconnected display may land here. | Restore test: save a scripted set of documents in TextEdit, Preview and Finder, quit them, open the collection, compare frames (±2 px) and documents. Two-display and one-display restores by hand. |
 | **M4** | **Organise.** Spaces, drag and drop, tags, stars, notes, Next, Stats, select mode, undo, backup/restore to a file. Mostly MingTab's board, ported. | Unit tests on the model; UI tests in the webview (Playwright against the dev server, as MingTab does). |
 | **M5** | **Tabs.** MingTab bridge (native messaging: list a browser window's tabs, save them with the window, hand restores to MingTab); Safari, Finder and Terminal tabs through AppleScript; VS Code workspaces. | Bridge protocol unit-tested on both sides; restore of a browser window with its tabs by hand. |
-| **M6** | **Windows.** The `windows` platform implementation, tray icon, installer. | The M1–M3 scripted tests, ported to Notepad/Explorer windows. |
+| **M6** | **Windows.** The `windows` platform implementation, tray icon, installer. **Started early, 2026-11-23** (§7.16): M1 on Windows first, then M2 and M3 as they land on the Mac. | The M1–M3 scripted tests, ported to Explorer windows (`cargo test e2e_own_explorer_windows -- --ignored`; Windows 11's Notepad opens files as tabs in one window that may be the user's, so it isn't used). M1's passed on the PC 2026-11-23. |
 | **M7** | **Linux.** X11 first; then KDE, GNOME, sway or Hyprland as asked. | Same tests on an X11 session. |
 | later | Sync (MingTab's Cloudflare Worker gains a MingDesk table set), window thumbnails (Screen Recording permission), per-app restore helpers, snapping the focused window to halves/thirds/quarters from the hotkey (kept modest: Rectangle does this well). | |
 
@@ -197,6 +226,12 @@ Decided 2026-11-22 (after Keith's hand check of the board):
     MingDesk, MingTab and Agent Sessions, so the suite gets a look of its own that stays quiet next to other
     apps. A separate piece of work from M1.
 
+Decided 2026-11-23:
+
+16. **Windows now:** Keith decided on 2026-11-23 to start the Windows version now, ahead of its slot as
+    milestone M6 (planning #25).
+17. **Switcher hotkey on Windows: Ctrl+Alt+Space** (planning #26). The Mac keeps ⌥Space.
+
 ## 8. The desk: List and Desk views
 
 The board shows one live desk in two views, switched with a toggle (and a key). Both show the same data, so a
@@ -225,9 +260,24 @@ change in one appears in the other at once.
 
 - **Identity:** each display is known by its UUID (`CGDisplayCreateUUIDFromDisplayID`), which survives unplugging
   and waking, unlike the display number. Fallback for monitors that share a UUID: name + resolution + position.
+  - **Windows:** by the monitor's device path from the display configuration API
+    (`\\?\DISPLAY#SAM74AE#5&2228a2e4&0&UID4356#{…}`: the model code, then the connector instance). It survives
+    reboots, sleep and re-plugging into the same port, unlike the `HMONITOR` handle or `\\.\DISPLAY1`, which can
+    change with any reconfiguration. Plugging into a different port gives a new id: MingDesk then sees a new
+    display, as it would a new monitor. Names are the monitor's friendly name ("Odyssey G95C"); a laptop's own
+    panel, which has none, is "Built-in display". Mirrored monitors share one desktop rectangle and count once.
 - **Coordinates:** one system throughout, CoreGraphics' global points (origin top-left of the main display, which
   is also what Accessibility uses); AppKit's bottom-left `NSScreen` frames are converted at the edge. Saved frames
   also keep their position relative to their display, so a restore can map them onto another arrangement.
+  - **Windows: physical pixels** (decided 2026-11-23), origin at the primary monitor's top-left, y down. Windows
+    arranges monitors in physical pixels; each can have its own scale (100% on a big monitor, 200% on a Surface's
+    panel). Logical coordinates (pixels ÷ scale) would shrink each monitor by a different factor while the
+    arrangement stays in physical units, leaving gaps and overlaps between monitors and making "which display is
+    this window on" wrong at the seams. Physical pixels have none of that, and they're what Win32 reports to a
+    per-monitor DPI-aware thread (MingDesk makes every reading thread one, whatever the process's awareness).
+    The cost: the Desk view draws a 200% panel twice as big as its "looks like" size, as Settings → Display does.
+    A minimized window's restored frame comes in workspace coordinates (relative to the work area: the monitor
+    minus the taskbar) and is shifted to screen coordinates at the edge.
 - **Which display a window is on:** the one it overlaps most. A window on no display goes to Off-screen.
   Mirrored displays count as one.
 - **Setups** (decided 2026-11-21, §7.10): MingDesk remembers each set of displays connected together as a
@@ -239,7 +289,7 @@ change in one appears in the other at once.
   part of a known setup counts as that setup with displays missing, until the user says **This is a setup of
   its own**. Queued moves onto a ghost are for later, probably M3.
 - **"Displays have separate Spaces":** read from the system; whether a window is on the current desktop is worked
-  out per display when it's on.
+  out per display when it's on. Windows has no such setting: a virtual desktop always spans every display (§2).
 - **Order:** main display first, then left to right as arranged. Headers show the name, resolution and "main".
 - **Changes:** displays are re-read whenever one is added, removed or rearranged; windows macOS moves are picked
   up by the live refresh.
@@ -247,4 +297,6 @@ change in one appears in the other at once.
   revisit after trying it in M1.
 - **Designing for:** a very wide display (Desk view fits by width; zoom on one display), no built-in display
   at all (lid closed), the main display anywhere in the arrangement, and a trackpad first on the Desk view
-  (pinch to zoom, two-finger pan, generous resize handles).
+  (pinch to zoom, two-finger pan, generous resize handles). A mouse works too (Keith's PC, 2026-11-23): Ctrl+wheel
+  zooms in 20% steps, and Ctrl+drag, a middle-button drag or a drag from empty space moves around; a plain drag
+  on a window is kept for moving it (M2).
