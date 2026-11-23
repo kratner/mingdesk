@@ -86,38 +86,62 @@ fn desk(
 /// The file holds real window titles: keep it out of the repo (`snapshots/` is git-ignored).
 #[tauri::command]
 fn export_desk(
+    _app: AppHandle,
     platform: State<'_, PlatformState>,
     known: State<'_, KnownState>,
     stamp: String,
 ) -> Result<String, String> {
     let desk = desk_of(platform.as_ref(), &known)?;
+    #[cfg(not(target_os = "windows"))]
+    let (os, model) = (
+        command_output("sw_vers", &["-productVersion"]),
+        command_output("sysctl", &["-n", "hw.model"]),
+    );
+    #[cfg(target_os = "windows")]
+    let (os, model) = (platform::windows_version(), platform::windows_model());
     let file = serde_json::json!({
         "kind": "mingdesk-snapshot",
         "format": 1,
         "exported": stamp,
         "version": env!("CARGO_PKG_VERSION"),
         "platform": platform.name(),
-        "os": command_output("sw_vers", &["-productVersion"]),
-        "model": command_output("sysctl", &["-n", "hw.model"]),
+        "os": os,
+        "model": model,
         "desk": desk,
     });
-    let home = std::env::var_os("HOME").ok_or("No home folder to save into.")?;
+    #[cfg(not(target_os = "windows"))]
+    let downloads = PathBuf::from(std::env::var_os("HOME").ok_or("No home folder to save into.")?)
+        .join("Downloads");
+    // Windows lets people move Downloads (to another drive, to OneDrive): ask for the known folder.
+    #[cfg(target_os = "windows")]
+    let downloads = _app
+        .path()
+        .download_dir()
+        .map_err(|e| format!("No Downloads folder to save into: {e}"))?;
     let name: String = stamp
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
         .collect();
-    let path = PathBuf::from(home)
-        .join("Downloads")
-        .join(format!("MingDesk desk {name}.json"));
+    let path = downloads.join(format!("MingDesk desk {name}.json"));
     let text = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
     std::fs::write(&path, text).map_err(|e| format!("Couldn't save {}: {e}", path.display()))?;
     log::event(&format!("exported the desk to {}", path.display()));
     #[cfg(target_os = "macos")]
     let _ = std::process::Command::new("open").arg("-R").arg(&path).spawn();
+    // Opens a File Explorer window with the file selected. The comma belongs to the switch, so the path is
+    // passed raw rather than as a separately quoted argument.
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("explorer")
+            .raw_arg(format!("/select,\"{}\"", path.display()))
+            .spawn();
+    }
     Ok(path.display().to_string())
 }
 
 /// A short command's trimmed output (for the export's OS version and Mac model), or None.
+#[cfg(not(target_os = "windows"))]
 fn command_output(program: &str, args: &[&str]) -> Option<String> {
     let out = std::process::Command::new(program).args(args).output().ok()?;
     out.status
@@ -309,14 +333,19 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open MingDesk", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit MingDesk", true, Some("CmdOrCtrl+Q"))?;
     let menu = Menu::with_items(app, &[&open, &PredefinedMenuItem::separator(app)?, &quit])?;
-    TrayIconBuilder::with_id("mingdesk")
-        .icon(tauri::image::Image::from_bytes(include_bytes!(
-            "../icons/tray-template.png"
-        ))?)
+    // The Mac's icon is a black template image the menu bar recolours; the Windows tray draws icons as they are,
+    // so it gets the app icon, which shows on light and dark taskbars.
+    #[cfg(not(target_os = "windows"))]
+    let icon = include_bytes!("../icons/tray-template.png").as_slice();
+    #[cfg(target_os = "windows")]
+    let icon = include_bytes!("../icons/32x32.png").as_slice();
+    let builder = TrayIconBuilder::with_id("mingdesk")
+        .icon(tauri::image::Image::from_bytes(icon)?)
         .icon_as_template(true)
         .tooltip("MingDesk")
         .menu(&menu)
-        .show_menu_on_left_click(true)
+        // Windows: left-click opens the board, right-click shows the menu, as tray icons do there.
+        .show_menu_on_left_click(cfg!(not(target_os = "windows")))
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => {
                 log::event("menu-bar icon: Open MingDesk");
@@ -324,8 +353,21 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             }
             "quit" => app.exit(0),
             _ => {}
-        })
-        .build(app)?;
+        });
+    #[cfg(target_os = "windows")]
+    let builder = builder.on_tray_icon_event(|tray, event| {
+        use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
+        if let TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+        } = event
+        {
+            log::event("tray icon: left click");
+            show_board(tray.app_handle());
+        }
+    });
+    builder.build(app)?;
     Ok(())
 }
 
