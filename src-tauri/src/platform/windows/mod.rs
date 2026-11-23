@@ -190,7 +190,100 @@ impl Platform for WinPlatform {
 #[cfg(test)]
 mod probe {
     use super::*;
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
+
+    /// End to end on the real desk, touching only windows it opens itself: two File Explorer windows on folders
+    /// of its own in the temp folder. Checks MingDesk lists them, hears changes, minimizes, focuses, brings two
+    /// forward in order, notices a new one and closes them. It takes focus while it runs: ask first.
+    /// `cargo test e2e_own_explorer_windows -- --ignored --nocapture --test-threads=1`
+    ///
+    /// Not covered: bringing a whole app forward (for Explorer that would raise the user's own Explorer windows),
+    /// and Notepad (Windows 11 opens files as tabs in a Notepad window that may be the user's).
+    #[test]
+    #[ignore]
+    fn e2e_own_explorer_windows() {
+        use crate::platform::Change;
+        use std::sync::{Arc, Mutex};
+        use std::thread::sleep;
+
+        let root = std::env::temp_dir().join(format!("mingdesk-e2e-{}", std::process::id()));
+        let folder = |name: &str| {
+            let p = root.join(name);
+            std::fs::create_dir_all(&p).unwrap();
+            p
+        };
+        let open = |name: &str| {
+            std::process::Command::new("explorer")
+                .arg(format!("/n,{}", folder(name).display()))
+                .spawn()
+                .unwrap();
+        };
+        let find = |name: &str| read().windows.into_iter().find(|w| w.title.contains(name));
+        let wait_for = |name: &str, check: &dyn Fn(Option<&WindowInfo>) -> bool| {
+            for _ in 0..40 {
+                if check(find(name).as_ref()) {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            panic!("{name}: never got there; now {:?}", find(name));
+        };
+        let (a, b) = ("mingdesk-e2e-a", "mingdesk-e2e-b");
+
+        let heard = Arc::new(Mutex::new(Vec::<(Instant, Change)>::new()));
+        let log = heard.clone();
+        WinPlatform.watch(Arc::new(move |c| log.lock().unwrap().push((Instant::now(), c))));
+        sleep(Duration::from_millis(500));
+        let step = |label: &str, act: &dyn Fn()| {
+            heard.lock().unwrap().clear();
+            let at = Instant::now();
+            act();
+            sleep(Duration::from_millis(1200));
+            let events = heard.lock().unwrap();
+            println!(
+                "{label:<30} {:>4} events, first after {:?}",
+                events.len(),
+                events.first().map(|(t, _)| t.duration_since(at))
+            );
+            events.len()
+        };
+
+        let opened = step("open a", &|| open(a));
+        wait_for(a, &|w| w.is_some());
+        let wa = find(a).unwrap();
+        println!("  listed: app={:?} title={:?} frame={:?}", wa.app, wa.title, wa.frame);
+
+        let minimized = step("minimize a", &|| WinPlatform.minimize(wa.id).unwrap());
+        wait_for(a, &|w| w.is_some_and(|w| w.minimized));
+        println!("  minimized frame (restored place): {:?}", find(a).unwrap().frame);
+
+        let focused = step("focus a (restores it)", &|| WinPlatform.focus(wa.id).unwrap());
+        wait_for(a, &|w| w.is_some_and(|w| !w.minimized && w.focused));
+
+        let created = step("open b (new window noticed)", &|| open(b));
+        wait_for(b, &|w| w.is_some());
+        let wb = find(b).unwrap();
+
+        // b is in front of a now; bring a then b forward in that order and check b ends up in front of a again,
+        // after first putting a in front.
+        WinPlatform.focus(wa.id).unwrap();
+        sleep(Duration::from_millis(300));
+        step("bring a, b forward in order", &|| actions::bring_forward(&[wa.id, wb.id]).unwrap());
+        let (oa, ob) = (find(a).unwrap(), find(b).unwrap());
+        assert!(ob.order < oa.order && ob.focused, "b in front of a and focused: a={oa:?} b={ob:?}");
+
+        let closed = step("close a and b", &|| {
+            WinPlatform.close(wa.id).unwrap();
+            WinPlatform.close(wb.id).unwrap();
+        });
+        wait_for(a, &|w| w.is_none());
+        wait_for(b, &|w| w.is_none());
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            opened > 0 && minimized > 0 && focused > 0 && created > 0 && closed > 0,
+            "every step was heard"
+        );
+    }
 
     /// What MingDesk sees on this PC. Reads only; opens, focuses and changes nothing.
     /// `cargo test probe_this_pc -- --ignored --nocapture`
