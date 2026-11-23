@@ -345,6 +345,36 @@ export function DeskView({
     trackMiddle();
   });
 
+  // A mouse's Ctrl+wheel comes in notches (deltaY about 100 each), which the pinch formula below turned into a
+  // ×2.7 jump per notch (Keith on Windows, 2026-11-23). A notch is a 20% step instead, and the zoom glides there
+  // over a few frames; notches in quick succession add up. Each frame keeps the point under the pointer still.
+  const glide = useRef<{ target: number; z: number; px: number; py: number; frame: number } | null>(null);
+  const glideBy = (notches: number, px: number, py: number) => {
+    const g = glide.current;
+    const from = g ? g.target : zoomRef.current;
+    const target = clampZoom(from * Math.pow(1.2, notches));
+    if (g) {
+      Object.assign(g, { target, px, py });
+      return;
+    }
+    const step = () => {
+      const s = glide.current;
+      if (!s) return;
+      s.z += (s.target - s.z) * 0.35;
+      const done = Math.abs(s.target - s.z) / s.target < 0.003;
+      zoomAround(done ? s.target : s.z, s.px, s.py);
+      if (done) glide.current = null;
+      else s.frame = requestAnimationFrame(step);
+    };
+    glide.current = { target, z: zoomRef.current, px, py, frame: requestAnimationFrame(step) };
+  };
+  useEffect(
+    () => () => {
+      if (glide.current) cancelAnimationFrame(glide.current.frame);
+    },
+    [],
+  );
+
   // A pinch zooms around the pointer: newer WebKit sends it as ctrl+wheel, older WebKit (Mojave's) only as
   // Safari's own gesture events. Plain scrolling is left to the browser.
   useEffect(() => {
@@ -360,6 +390,13 @@ export function DeskView({
       if (!e.ctrlKey || (e.target as Element).closest('.tray-list')) return;
       e.preventDefault();
       if (pinching) return;
+      // A mouse notch: line-based, or a big pixel step a pinch never sends.
+      if (e.deltaMode !== 0 || Math.abs(e.deltaY) >= 40) {
+        const lines = e.deltaMode === 0 ? e.deltaY / 100 : e.deltaY / 3;
+        const notches = -Math.sign(lines) * Math.max(1, Math.round(Math.abs(lines)));
+        glideBy(notches, ...at(e));
+        return;
+      }
       zoomAround(zoomRef.current * Math.exp(-e.deltaY / 100), ...at(e));
     };
     type Gesture = Event & { scale: number; clientX: number; clientY: number };
