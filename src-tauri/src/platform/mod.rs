@@ -11,14 +11,17 @@ use std::sync::Arc;
 
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod other;
+#[cfg(target_os = "windows")]
+mod windows;
 
 /// Whether MingDesk may see and control other apps' windows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Permission {
     /// Allowed: on the Mac, MingDesk is ticked under Accessibility.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Granted,
     /// Not yet: the board shows the steps to allow it.
     Missing,
@@ -206,7 +209,11 @@ pub fn current() -> Box<dyn Platform> {
     {
         Box::new(macos::MacPlatform)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        Box::new(self::windows::WinPlatform)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Box::new(other::OtherPlatform)
     }
