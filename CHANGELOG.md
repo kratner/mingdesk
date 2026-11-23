@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.6 (2026-11-22): M1 preview
+
+- Desk view: a Zoom slider in the toolbar. Zoomed in, the desk scrolls, with scrollbars, the wheel or two fingers.
+- Pinch to zoom works on macOS Mojave too (its WebKit sends Safari's own pinch events).
+- Slim, quiet scrollbars everywhere, gold while you hold one.
+- The Desk canvas fits a small window (the 2012 MacBook Air's) without the page scrolling.
+
 ## 0.2.5 (2026-11-22): M1 preview
 
 - A window titled after its app shows its name once ("Keychain Access", not "Keychain Access: Keychain Access").
