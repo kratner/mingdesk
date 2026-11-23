@@ -10,6 +10,7 @@ use crate::platform::Rect;
 use ::windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, MAX_PATH, RECT};
 use ::windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use ::windows::Win32::Storage::FileSystem::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
+use ::windows::Win32::UI::Shell::SHLoadIndirectString;
 use ::windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
@@ -107,24 +108,51 @@ fn cloaked(h: HWND) -> bool {
 /// The frame people see: DWM's extended frame bounds leave out the invisible resize borders that GetWindowRect
 /// includes (about 7 px on each side but the top on Windows 10 and 11).
 pub fn frame_of(h: HWND) -> Option<Rect> {
-    let mut r = RECT::default();
-    // SAFETY: DWMWA_EXTENDED_FRAME_BOUNDS fills a RECT.
-    let dwm = unsafe {
-        DwmGetWindowAttribute(
-            h,
-            DWMWA_EXTENDED_FRAME_BOUNDS,
-            &mut r as *mut _ as *mut _,
-            size_of::<RECT>() as u32,
+    let (mut drawn, mut outer) = (RECT::default(), RECT::default());
+    // SAFETY: DWMWA_EXTENDED_FRAME_BOUNDS and GetWindowRect each fill a RECT.
+    let (dwm, win) = unsafe {
+        (
+            DwmGetWindowAttribute(
+                h,
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                &mut drawn as *mut _ as *mut _,
+                size_of::<RECT>() as u32,
+            ),
+            GetWindowRect(h, &mut outer),
         )
     };
-    // SAFETY: fills a RECT.
-    if dwm.is_err() && unsafe { GetWindowRect(h, &mut r) }.is_err() {
-        return None;
+    let outer = win.ok().map(|_| rules::rect(outer.left, outer.top, outer.right, outer.bottom));
+    match dwm {
+        Ok(()) => {
+            let drawn = rules::rect(drawn.left, drawn.top, drawn.right, drawn.bottom);
+            if let Some(outer) = outer {
+                remember_insets(id_of(h), rules::insets(&outer, &drawn));
+            }
+            Some(drawn)
+        }
+        Err(_) => outer,
     }
-    Some(rules::rect(r.left, r.top, r.right, r.bottom))
 }
 
-/// Where a minimized window goes back to, in workspace coordinates.
+/// Each window's invisible borders as last measured while it was visible, and the latest measured on any window
+/// (for one that was already minimized when MingDesk started).
+fn insets_store() -> &'static Mutex<(HashMap<u32, rules::Insets>, Option<rules::Insets>)> {
+    static INSETS: OnceLock<Mutex<(HashMap<u32, rules::Insets>, Option<rules::Insets>)>> = OnceLock::new();
+    INSETS.get_or_init(Default::default)
+}
+
+fn remember_insets(id: u32, i: rules::Insets) {
+    let mut store = insets_store().lock().unwrap();
+    if store.0.len() > 4096 {
+        store.0.clear(); // closed windows' entries; cheap to learn again
+    }
+    store.0.insert(id, i);
+    if i != (0.0, 0.0, 0.0, 0.0) {
+        store.1 = Some(i);
+    }
+}
+
+/// Where a minimized window goes back to, in workspace coordinates, without its invisible borders.
 fn restored_frame(h: HWND) -> Option<Rect> {
     let mut p = WINDOWPLACEMENT {
         length: size_of::<WINDOWPLACEMENT>() as u32,
@@ -133,7 +161,12 @@ fn restored_frame(h: HWND) -> Option<Rect> {
     // SAFETY: `length` is set as the call requires.
     unsafe { GetWindowPlacement(h, &mut p) }.ok()?;
     let r = p.rcNormalPosition;
-    Some(rules::rect(r.left, r.top, r.right, r.bottom))
+    let frame = rules::rect(r.left, r.top, r.right, r.bottom);
+    let store = insets_store().lock().unwrap();
+    Some(match store.0.get(&id_of(h)).copied().or(store.1) {
+        Some(i) => rules::trim(frame, i),
+        None => frame,
+    })
 }
 
 struct CoreWindow {
@@ -279,14 +312,33 @@ fn file_description(path: &str) -> Option<String> {
     }
 }
 
-/// An app's name: its FileDescription, else the exe's name without ".exe". Cached per executable.
+/// A Store app's name as the Start menu shows it ("WhatsApp", where the exe's FileDescription says
+/// "WhatsApp.Root"): its package manifest's DisplayName, resolved through the package's resources when it's a
+/// reference ("ms-resource:AppName").
+fn store_app_name(exe: &str) -> Option<String> {
+    let (folder, full_name) = rules::store_package(exe)?;
+    let xml = std::fs::read_to_string(Path::new(folder).join("AppxManifest.xml")).ok()?;
+    let name = rules::manifest_display_name(&xml)?;
+    let Some(resource) = name.strip_prefix("ms-resource:") else {
+        return Some(name.to_string());
+    };
+    let source = to_wide(&rules::indirect_string(full_name, resource));
+    let mut buf = [0u16; 512];
+    // SAFETY: the source is NUL-terminated and the buffer's length is passed with it.
+    unsafe { SHLoadIndirectString(PCWSTR(source.as_ptr()), &mut buf, None) }.ok()?;
+    let end = buf.iter().position(|c| *c == 0).unwrap_or(buf.len());
+    let s = String::from_utf16_lossy(&buf[..end]).trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
+/// An app's name: a Store app's display name, else its FileDescription, else the exe's name without ".exe". Cached per executable.
 pub fn app_name(path: &str) -> String {
     static NAMES: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
     let names = NAMES.get_or_init(Default::default);
     if let Some(n) = names.lock().unwrap().get(path) {
         return n.clone();
     }
-    let name = file_description(path).unwrap_or_else(|| {
+    let name = store_app_name(path).or_else(|| file_description(path)).unwrap_or_else(|| {
         Path::new(path)
             .file_stem()
             .map_or_else(|| path.to_string(), |s| s.to_string_lossy().into_owned())

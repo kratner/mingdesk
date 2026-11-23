@@ -67,6 +67,63 @@ pub fn workspace_to_screen(normal: Rect, monitor: &Rect, work: &Rect) -> Rect {
     )
 }
 
+/// The invisible resize borders around a window: how far GetWindowRect reaches past what DWM draws, per side
+/// (left, top, right, bottom). Read while a window is visible, so its restored frame can be trimmed the same way
+/// once it's minimized (GetWindowPlacement includes them, and DWM can't measure a minimized window).
+pub type Insets = (f64, f64, f64, f64);
+
+pub fn insets(window_rect: &Rect, drawn: &Rect) -> Insets {
+    (
+        drawn.x - window_rect.x,
+        drawn.y - window_rect.y,
+        window_rect.right() - drawn.right(),
+        window_rect.bottom() - drawn.bottom(),
+    )
+}
+
+/// `r` without its invisible borders. Insets outside 0..=32 px are taken as a misreading and ignored.
+pub fn trim(r: Rect, (l, t, rt, b): Insets) -> Rect {
+    let ok = |v: f64| (0.0..=32.0).contains(&v);
+    if !(ok(l) && ok(t) && ok(rt) && ok(b)) || r.w <= l + rt || r.h <= t + b {
+        return r;
+    }
+    Rect::new(r.x + l, r.y + t, r.w - l - rt, r.h - t - b)
+}
+
+/// A Store app's package folder from its exe path: `C:\Program Files\WindowsApps\<package full name>\…`.
+pub fn store_package(exe: &str) -> Option<(&str, &str)> {
+    let lower = exe.to_ascii_lowercase();
+    let at = lower.find(r"\windowsapps\")? + r"\windowsapps\".len();
+    let name_len = exe[at..].find('\\')?;
+    Some((&exe[..at + name_len], &exe[at..at + name_len]))
+}
+
+/// The app's name from its AppxManifest.xml: `<Properties><DisplayName>`. Often a resource reference
+/// ("ms-resource:AppName"), which the caller resolves against the package.
+pub fn manifest_display_name(xml: &str) -> Option<&str> {
+    let props = &xml[xml.find("<Properties")?..];
+    let props = &props[..props.find("</Properties>").unwrap_or(props.len())];
+    let start = props.find("<DisplayName>")? + "<DisplayName>".len();
+    let end = start + props[start..].find("</DisplayName>")?;
+    let name = props[start..end].trim();
+    (!name.is_empty()).then_some(name)
+}
+
+/// What SHLoadIndirectString needs to resolve a manifest's "ms-resource:…" name: `@{<package full name>?<uri>}`,
+/// where a bare key lives under the package's `resources` map ("AppName" → ms-resource://<name>/resources/AppName),
+/// a path starting with `/` is under the package, and one starting with `//` is complete already.
+pub fn indirect_string(full_name: &str, resource: &str) -> String {
+    let package = full_name.split('_').next().unwrap_or(full_name);
+    let uri = if resource.starts_with("//") {
+        format!("ms-resource:{resource}")
+    } else if resource.starts_with('/') {
+        format!("ms-resource://{package}{resource}")
+    } else {
+        format!("ms-resource://{package}/resources/{resource}")
+    };
+    format!("@{{{full_name}?{uri}}}")
+}
+
 /// Full screen on Windows means no title bar and covering the whole monitor (games, F11 in a browser, video
 /// players). A maximized window keeps its title bar and stops at the taskbar, so it doesn't count.
 pub fn is_full_screen(frame: &Rect, monitor: &Rect, has_caption: bool) -> bool {
@@ -229,6 +286,49 @@ mod tests {
             workspace_to_screen(Rect::new(-1000.0, -300.0, 500.0, 500.0), &monitor, &work),
             Rect::new(-1000.0, -252.0, 500.0, 500.0)
         );
+    }
+
+    #[test]
+    fn invisible_borders_are_measured_and_trimmed() {
+        // Keith's PC, 2026-11-23: a File Explorer window drawn at (1940, 329, 1534×907) whose placement said
+        // (1933, 329, 1548×914): 7 px left, right and bottom, none at the top.
+        let outer = Rect::new(1933.0, 329.0, 1548.0, 914.0);
+        let drawn = Rect::new(1940.0, 329.0, 1534.0, 907.0);
+        let i = insets(&outer, &drawn);
+        assert_eq!(i, (7.0, 0.0, 7.0, 7.0));
+        assert_eq!(trim(outer, i), drawn);
+        assert_eq!(trim(outer, (-5.0, 0.0, 7.0, 7.0)), outer, "nonsense insets are ignored");
+        assert_eq!(trim(Rect::new(0.0, 0.0, 10.0, 10.0), (7.0, 0.0, 7.0, 7.0)), Rect::new(0.0, 0.0, 10.0, 10.0));
+    }
+
+    #[test]
+    fn store_apps_are_found_by_their_package_folder() {
+        let exe = r"C:\Program Files\WindowsApps\5319275A.WhatsAppDesktop_2.2644.101.0_x64__cv1g1gvanyjgm\WhatsApp.Root.exe";
+        let (folder, full) = store_package(exe).unwrap();
+        assert_eq!(full, "5319275A.WhatsAppDesktop_2.2644.101.0_x64__cv1g1gvanyjgm");
+        assert!(folder.ends_with(full));
+        assert_eq!(store_package(r"C:\Program Files\Google\Chrome\Application\chrome.exe"), None);
+    }
+
+    #[test]
+    fn manifest_names_come_from_properties() {
+        let xml = r#"<Package><Properties><DisplayName>WhatsApp</DisplayName><PublisherDisplayName>WhatsApp Inc.</PublisherDisplayName></Properties>
+            <Applications><Application><uap:VisualElements DisplayName="ms-resource:Other"/></Application></Applications></Package>"#;
+        assert_eq!(manifest_display_name(xml), Some("WhatsApp"));
+        let xml = "<Properties>\n  <DisplayName>ms-resource:AppDisplayName</DisplayName>\n</Properties>";
+        assert_eq!(manifest_display_name(xml), Some("ms-resource:AppDisplayName"));
+        assert_eq!(manifest_display_name("<Package/>"), None);
+    }
+
+    #[test]
+    fn manifest_resources_resolve_against_their_package() {
+        let full = "Microsoft.WindowsCalculator_11.2502.2.0_x64__8wekyb3d8bbwe";
+        assert_eq!(
+            indirect_string(full, "AppStoreName"),
+            "@{Microsoft.WindowsCalculator_11.2502.2.0_x64__8wekyb3d8bbwe?ms-resource://Microsoft.WindowsCalculator/resources/AppStoreName}"
+        );
+        assert!(indirect_string(full, "/Resources/AppName").ends_with("?ms-resource://Microsoft.WindowsCalculator/Resources/AppName}"));
+        assert!(indirect_string(full, "//Other/x").ends_with("?ms-resource://Other/x}"));
     }
 
     #[test]
