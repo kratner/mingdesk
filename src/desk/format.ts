@@ -29,6 +29,8 @@ export function desktopNames(desk: Desk): Map<number, string> {
   let n = 0;
   for (const d of desk.displays) {
     for (const x of d.desktops) {
+      // On Windows one desktop spans every display, so it's listed under each with the same id: name it once.
+      if (names.has(x.id)) continue;
       if (x.fullScreen) {
         const w = byDesktop.get(x.id);
         // Mid-swipe the window server briefly doesn't say which window a full-screen space holds; keep the name
