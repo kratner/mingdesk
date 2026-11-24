@@ -49,6 +49,8 @@ interface TrayItem {
   key: string;
   label: string;
   app: string | null;
+  /** The app's id, for its icon. */
+  appId: string | null;
   /** The window's own title, with the app's name trimmed off the end, for the list. */
   short: string;
   title: string;
@@ -122,7 +124,7 @@ function TrayList({
                     onFocus={() => onPeek(it.window)}
                     onClick={() => it.window !== null && onPick(it.window)}
                   >
-                    {it.app && <AppBadge app={it.app} />}
+                    {it.app && <AppBadge app={it.app} appId={it.appId} />}
                     <span className="tray-list-label">{it.short}</span>
                     {it.frame && (
                       <>
@@ -212,6 +214,7 @@ export function DeskView({
               key: `x${x.id}`,
               label: `${x.fullScreen ? '⛶' : '▭'} ${names.get(x.id)}`,
               app: null,
+              appId: null,
               short: `${x.fullScreen ? '⛶' : '▭'} ${names.get(x.id)}`,
               frame: null,
               title: first ? `Go to ${names.get(x.id)}` : emptyDesktopHint(),
@@ -230,6 +233,7 @@ export function DeskView({
             key: `w${w.id}`,
             label: `◫ ${appAndTitle(w)}`,
             app: w.app,
+            appId: w.appId,
             short: trimApp(windowLabel(w), w.app),
             frame: w.frame,
             title: `Behind other windows: ${windowLabel(w)}. Click to bring it forward.`,
@@ -246,6 +250,7 @@ export function DeskView({
             key: `w${w.id}`,
             label: `▁ ${appAndTitle(w)}`,
             app: w.app,
+            appId: w.appId,
             short: trimApp(windowLabel(w), w.app),
             title: `Restore ${windowLabel(w)}`,
             window: w.id,
@@ -601,7 +606,7 @@ export function DeskView({
                         onClick={() => onAct({ kind: 'focus', window: w.id })}
                         onDoubleClick={(e) => e.stopPropagation()}
                       >
-                        <AppBadge app={w.app} />
+                        <AppBadge app={w.app} appId={w.appId} />
                         <span className="win-title">{trimApp(windowLabel(w), w.app)}</span>
                       </button>
                     )}
@@ -708,6 +713,7 @@ export function DeskView({
               key: `w${w.id}`,
               label: `${appAndTitle(w)}`,
               app: w.app,
+              appId: w.appId,
               short: `${w.app} · ${trimApp(windowLabel(w), w.app)}`,
               title: `Bring forward: ${windowLabel(w)}`,
               window: w.id,

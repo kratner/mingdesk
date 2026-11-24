@@ -171,6 +171,8 @@ button.icon:hover { background: var(--fo-bg); color: var(--fo-text); }
 .app-badge { flex: none; width: var(--badge, 24px); height: var(--badge, 24px); border-radius: 6px; display: inline-grid; place-items: center;
   font-size: var(--badge-font, 12px); font-weight: 700;
   color: #fff; background: hsl(var(--hue) 45% 42%); }
+/* The app's real icon: no coloured tile or rounding behind it; it brings its own shape. */
+img.app-badge.app-icon { display: inline-block; background: none; border-radius: 0; object-fit: contain; }
 
 /* Desk */
 .deskview { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }

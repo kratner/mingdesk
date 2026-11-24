@@ -2,6 +2,8 @@
 // desktop showing now come first, then each other desktop or full-screen space, then minimized windows.
 // "By app" regroups the same rows by app. Dragging rows between displays and in the stack is M2.
 
+import { useEffect, useState } from 'react';
+import { appIcon, knownIcon } from './api';
 import { appHue, desktopNames, emptyDesktopHint, matches, resolution, windowLabel } from './format';
 import { useFolds, type Folds } from './folds';
 import type { Action, Desk, DeskDisplay, WindowInfo } from './types';
@@ -38,7 +40,7 @@ export function ListView({ desk, grouping, filter, onAct }: Props) {
           <section key={ws[0].pid} className="group" aria-label={ws[0].app}>
             <header className="group-head">
               <Fold id={id} folds={folds}>
-                <AppBadge app={ws[0].app} />
+                <AppBadge app={ws[0].app} appId={ws[0].appId} />
                 <h3>{ws[0].app}</h3>
               </Fold>
               <span className="count">{ws.length}</span>
@@ -237,7 +239,23 @@ function Fold({ id, folds, children }: { id: string; folds: Folds; children: Rea
   );
 }
 
-export function AppBadge({ app }: { app: string }) {
+/** The app's own icon where the OS gives one (Windows so far), else its initial on a colour of its own. */
+export function AppBadge({ app, appId }: { app: string; appId?: string | null }) {
+  const [icon, setIcon] = useState<string | null | undefined>(() => (appId ? knownIcon(appId) : null));
+  useEffect(() => {
+    if (!appId) {
+      setIcon(null);
+      return;
+    }
+    let live = true;
+    appIcon(appId).then((url) => {
+      if (live) setIcon(url);
+    });
+    return () => {
+      live = false;
+    };
+  }, [appId]);
+  if (icon) return <img className="app-badge app-icon" src={icon} alt="" aria-hidden="true" draggable={false} />;
   return (
     <span className="app-badge" style={{ '--hue': appHue(app) } as React.CSSProperties} aria-hidden="true">
       {app.slice(0, 1).toUpperCase()}
@@ -250,7 +268,7 @@ function Row({ w, onAct, where }: { w: WindowInfo; onAct: (a: Action) => void; w
   return (
     <li className={`row${w.focused ? ' focused' : ''}`}>
       <button type="button" className="row-main" onClick={() => onAct({ kind: 'focus', window: w.id })} title={`Go to ${label}`}>
-        <AppBadge app={w.app} />
+        <AppBadge app={w.app} appId={w.appId} />
         <span className="row-text">
           <span className="row-title">{label}</span>
           <span className="row-app">

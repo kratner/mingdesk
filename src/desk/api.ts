@@ -99,3 +99,30 @@ export async function forgetSetup(id: string): Promise<void> {
   desk.otherSetups = desk.otherSetups.filter((s) => s.id !== id);
   mockChanged();
 }
+
+/** Apps' icons as data URLs, by app id; null once the core has said it has none (the badge keeps the initial). */
+const icons = new Map<string, string | null>();
+const asking = new Map<string, Promise<string | null>>();
+
+/** The icon already known for an app, without asking: a URL, null for none, undefined if not asked yet. */
+export function knownIcon(appId: string): string | null | undefined {
+  return icons.get(appId);
+}
+
+/** Asks the core for an app's icon once; every badge for that app shares the answer. */
+export function appIcon(appId: string): Promise<string | null> {
+  if (icons.has(appId)) return Promise.resolve(icons.get(appId)!);
+  if (!inTauri) return Promise.resolve(null);
+  let p = asking.get(appId);
+  if (!p) {
+    p = invoke<string | null>('app_icon', { appId })
+      .catch(() => null)
+      .then((url) => {
+        icons.set(appId, url);
+        asking.delete(appId);
+        return url;
+      });
+    asking.set(appId, p);
+  }
+  return p;
+}
