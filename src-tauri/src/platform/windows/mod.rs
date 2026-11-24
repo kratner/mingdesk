@@ -12,6 +12,7 @@
 mod actions;
 mod desktops;
 mod displays;
+mod icons;
 mod list;
 mod rules;
 mod system;
@@ -185,11 +186,16 @@ impl Platform for WinPlatform {
     fn watch(&self, sink: Sink) {
         watch::start(sink);
     }
+
+    fn app_icon(&self, app_id: &str) -> Option<Vec<u8>> {
+        icons::icon(app_id)
+    }
 }
 
 #[cfg(test)]
 mod probe {
     use super::*;
+    use std::path::Path;
     use std::time::{Duration, Instant};
 
     /// End to end on the real desk, touching only windows it opens itself: two File Explorer windows on folders
@@ -294,6 +300,17 @@ mod probe {
         let snap = read();
         println!("snapshot took {:?}", started.elapsed());
         println!("os: {:?}\nmodel: {:?}", os_version(), model());
+        let mut apps: Vec<&str> = snap.windows.iter().filter_map(|w| w.app_id.as_deref()).collect();
+        apps.sort();
+        apps.dedup();
+        for a in apps {
+            let png = icons::icon(a);
+            println!("icon {:>6} bytes  {a}", png.as_ref().map_or(0, Vec::len));
+            if let (Some(png), Ok(dir)) = (png, std::env::var("MINGDESK_ICON_DIR")) {
+                let name = Path::new(a).file_stem().unwrap().to_string_lossy().into_owned();
+                std::fs::write(Path::new(&dir).join(format!("{name}.png")), png).unwrap();
+            }
+        }
         println!("\nDisplays:");
         for d in &snap.displays {
             println!("  {} | {} | {:?} | main={}", d.name, d.id, d.frame, d.main);

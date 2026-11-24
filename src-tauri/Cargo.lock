@@ -1998,6 +1998,7 @@ dependencies = [
  "block2",
  "core-foundation",
  "objc2",
+ "png",
  "serde",
  "serde_json",
  "tauri",

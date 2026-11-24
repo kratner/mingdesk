@@ -124,6 +124,53 @@ pub fn indirect_string(full_name: &str, resource: &str) -> String {
     format!("@{{{full_name}?{uri}}}")
 }
 
+/// The tile logo a Store app's manifest names for its app list and taskbar icon
+/// (`<uap:VisualElements … Square44x44Logo="Assets\AppList.png">`), relative to the package folder.
+pub fn manifest_logo(xml: &str) -> Option<&str> {
+    let key = "Square44x44Logo=\"";
+    let start = xml.find(key)? + key.len();
+    let end = start + xml[start..].find('"')?;
+    let path = xml[start..end].trim();
+    (!path.is_empty()).then_some(path)
+}
+
+/// Which of a logo's files on disk to use. A manifest names "AppList.png", but the package holds variants such as
+/// "AppList.targetsize-48_altform-unplated.png" or "AppList.scale-200.png". Best: the unplated variant (drawn
+/// without the tile's coloured plate, as the taskbar shows it) at a target size of 48 px or more, the smallest
+/// such; then any target size, closest to 64; then the largest scale.
+pub fn best_logo<'a>(stem: &str, files: &[&'a str]) -> Option<&'a str> {
+    let stem = stem.to_ascii_lowercase();
+    let score = |name: &str| -> Option<(u8, i64)> {
+        let lower = name.to_ascii_lowercase();
+        let rest = lower.strip_prefix(&stem)?.strip_suffix(".png")?;
+        if !(rest.is_empty() || rest.starts_with('.')) {
+            return None; // another logo that shares the prefix ("AppListBig.png")
+        }
+        let number_after = |tag: &str| -> Option<i64> {
+            let at = rest.find(tag)? + tag.len();
+            rest[at..].chars().take_while(char::is_ascii_digit).collect::<String>().parse().ok()
+        };
+        let plain = !rest.contains("altform") || rest.contains("altform-unplated");
+        if rest.contains("contrast-") || rest.contains("altform-lightunplated") || !plain {
+            return Some((0, 0));
+        }
+        let unplated = rest.contains("altform-unplated");
+        Some(match (number_after("targetsize-"), number_after("scale-")) {
+            (Some(t), _) if t >= 48 => (if unplated { 5 } else { 4 }, -t),
+            (Some(t), _) => (3, -(64 - t).abs()),
+            (None, Some(s)) => (2, s),
+            (None, None) => (1, 0),
+        })
+    };
+    files
+        .iter()
+        .copied()
+        .filter_map(|f| score(f).map(|s| (s, f)))
+        .filter(|(s, _)| s.0 > 0)
+        .max_by_key(|(s, _)| *s)
+        .map(|(_, f)| f)
+}
+
 /// Full screen on Windows means no title bar and covering the whole monitor (games, F11 in a browser, video
 /// players). A maximized window keeps its title bar and stops at the taskbar, so it doesn't count.
 pub fn is_full_screen(frame: &Rect, monitor: &Rect, has_caption: bool) -> bool {
@@ -318,6 +365,31 @@ mod tests {
         let xml = "<Properties>\n  <DisplayName>ms-resource:AppDisplayName</DisplayName>\n</Properties>";
         assert_eq!(manifest_display_name(xml), Some("ms-resource:AppDisplayName"));
         assert_eq!(manifest_display_name("<Package/>"), None);
+    }
+
+    #[test]
+    fn store_logos_prefer_unplated_target_sizes() {
+        let xml = r#"<uap:VisualElements DisplayName="WhatsApp" Square150x150Logo="Assets\Square150.png" Square44x44Logo="Assets\AppList.png" />"#;
+        assert_eq!(manifest_logo(xml), Some(r"Assets\AppList.png"));
+        let files = [
+            "AppList.scale-100.png",
+            "AppList.scale-200.png",
+            "AppList.targetsize-16.png",
+            "AppList.targetsize-48.png",
+            "AppList.targetsize-48_altform-unplated.png",
+            "AppList.targetsize-256_altform-unplated.png",
+            "AppList.targetsize-48_altform-lightunplated.png",
+            "AppList.targetsize-48_contrast-black.png",
+            "AppListBig.png",
+        ];
+        assert_eq!(best_logo("AppList", &files), Some("AppList.targetsize-48_altform-unplated.png"));
+        assert_eq!(
+            best_logo("AppList", &["AppList.scale-100.png", "AppList.scale-200.png", "AppList.targetsize-24.png"]),
+            Some("AppList.targetsize-24.png")
+        );
+        assert_eq!(best_logo("AppList", &["AppList.scale-100.png", "AppList.scale-200.png"]), Some("AppList.scale-200.png"));
+        assert_eq!(best_logo("applist", &["AppList.png"]), Some("AppList.png"), "case doesn't matter");
+        assert_eq!(best_logo("AppList", &["AppListBig.png", "Other.png"]), None);
     }
 
     #[test]

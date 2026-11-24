@@ -205,6 +205,12 @@ pub trait Platform: Send + Sync {
     /// Starts telling `sink` about changes, for as long as MingDesk runs. Platforms that can't watch leave it
     /// to the refresh's timer.
     fn watch(&self, _sink: Sink) {}
+
+    /// The app's icon as a PNG, from its `WindowInfo::app_id`, about 64 px square. None when the OS has none to
+    /// give, or the platform doesn't read icons yet: the board then shows the app's initial.
+    fn app_icon(&self, _app_id: &str) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 pub fn current() -> Box<dyn Platform> {
