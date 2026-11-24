@@ -40,7 +40,12 @@ pub fn screen_names() -> HashMap<u32, String> {
             let id: u32 = msg_send![number, unsignedIntValue];
             // localizedName arrived in macOS 10.15; on Mojave the board numbers the displays instead.
             let has_name: bool = msg_send![screen, respondsToSelector: objc2::sel!(localizedName)];
-            if has_name && let Some(name) = string_of(msg_send![screen, localizedName]) {
+            // Some displays (a virtual one, a screen caught mid-switch as the lid closes) give an empty name:
+            // number those too.
+            if has_name
+                && let Some(name) = string_of(msg_send![screen, localizedName])
+                && !name.trim().is_empty()
+            {
                 names.insert(id, name);
             }
         }
