@@ -149,6 +149,28 @@ fn command_output(program: &str, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// An app's icon for the board's badges, as a `data:image/png;base64,…` URL; None when the platform has none
+/// (the board then shows the app's initial). The board asks once per app and keeps the answer.
+#[tauri::command]
+fn app_icon(platform: State<'_, PlatformState>, app_id: String) -> Option<String> {
+    platform
+        .app_icon(&app_id)
+        .map(|png| format!("data:image/png;base64,{}", base64(&png)))
+}
+
+/// Standard base64 with padding (for icon data URLs).
+fn base64(bytes: &[u8]) -> String {
+    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = chunk.iter().enumerate().fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
+        for i in 0..4 {
+            out.push(if i <= chunk.len() { ABC[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}
+
 /// The switcher's search over the desk as it is now: window ids, best match first.
 #[tauri::command]
 fn search(
@@ -388,7 +410,8 @@ pub fn run() {
             adopt_setup,
             rename_setup,
             forget_setup,
-            export_desk
+            export_desk,
+            app_icon
         ])
         .setup(|app| {
             log::event(&format!("started, version {}", env!("CARGO_PKG_VERSION")));
@@ -506,6 +529,16 @@ mod tests {
         *p.permission.lock().unwrap() = Permission::Granted;
         assert_eq!(desk_of(&p, &known).unwrap().displays.len(), 1);
         assert_eq!(known.lock().unwrap().displays.len(), 1);
+    }
+
+    #[test]
+    fn base64_matches_the_standard_alphabet_and_padding() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
+        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+        assert_eq!(base64(&[0xfb, 0xff, 0xbf]), "+/+/");
     }
 
     #[test]
