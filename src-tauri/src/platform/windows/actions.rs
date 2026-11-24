@@ -12,8 +12,8 @@ use ::windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use ::windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{INPUT, INPUT_MOUSE, SendInput};
 use ::windows::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, HWND_TOP,
-    IsIconic, IsWindow, PostMessageW, SW_MINIMIZE, SW_RESTORE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, HWND_TOP, IsIconic, IsWindow,
+    PostMessageW, SW_MINIMIZE, SW_RESTORE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SetForegroundWindow, SetWindowPos, ShowWindowAsync, WM_CLOSE,
 };
 use std::time::{Duration, Instant};
@@ -71,7 +71,8 @@ fn set_foreground_attached(h: HWND) -> bool {
         let fg = GetForegroundWindow();
         let fg_thread = GetWindowThreadProcessId(fg, None);
         let me = GetCurrentThreadId();
-        let attached = fg_thread != 0 && fg_thread != me && AttachThreadInput(me, fg_thread, true).as_bool();
+        let attached =
+            fg_thread != 0 && fg_thread != me && AttachThreadInput(me, fg_thread, true).as_bool();
         let _ = BringWindowToTop(h);
         let ok = SetForegroundWindow(h).as_bool();
         if attached {

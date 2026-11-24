@@ -148,19 +148,26 @@ pub fn best_logo<'a>(stem: &str, files: &[&'a str]) -> Option<&'a str> {
         }
         let number_after = |tag: &str| -> Option<i64> {
             let at = rest.find(tag)? + tag.len();
-            rest[at..].chars().take_while(char::is_ascii_digit).collect::<String>().parse().ok()
+            rest[at..]
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect::<String>()
+                .parse()
+                .ok()
         };
         let plain = !rest.contains("altform") || rest.contains("altform-unplated");
         if rest.contains("contrast-") || rest.contains("altform-lightunplated") || !plain {
             return Some((0, 0));
         }
         let unplated = rest.contains("altform-unplated");
-        Some(match (number_after("targetsize-"), number_after("scale-")) {
-            (Some(t), _) if t >= 48 => (if unplated { 5 } else { 4 }, -t),
-            (Some(t), _) => (3, -(64 - t).abs()),
-            (None, Some(s)) => (2, s),
-            (None, None) => (1, 0),
-        })
+        Some(
+            match (number_after("targetsize-"), number_after("scale-")) {
+                (Some(t), _) if t >= 48 => (if unplated { 5 } else { 4 }, -t),
+                (Some(t), _) => (3, -(64 - t).abs()),
+                (None, Some(s)) => (2, s),
+                (None, None) => (1, 0),
+            },
+        )
     };
     files
         .iter()
@@ -227,7 +234,10 @@ pub fn guid_from_bytes(b: &[u8; 16]) -> u128 {
     let data2 = u16::from_le_bytes([b[4], b[5]]);
     let data3 = u16::from_le_bytes([b[6], b[7]]);
     let data4 = u64::from_be_bytes([b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]]);
-    (u128::from(data1) << 96) | (u128::from(data2) << 80) | (u128::from(data3) << 64) | u128::from(data4)
+    (u128::from(data1) << 96)
+        | (u128::from(data2) << 80)
+        | (u128::from(data3) << 64)
+        | u128::from(data4)
 }
 
 /// The registry's list of virtual desktops (VirtualDesktopIDs): GUIDs back to back, in Task View's order.
@@ -278,12 +288,27 @@ mod tests {
     #[test]
     fn hidden_owned_tool_and_untitled_windows_dont() {
         let base = app("Notepad", "notes.txt - Notepad");
-        assert!(!counts(&Candidate { visible: false, ..base.clone() }));
-        assert!(!counts(&Candidate { owned: true, ..base.clone() }), "a dialog");
-        assert!(!counts(&Candidate { tool_window: true, ..base.clone() }));
+        assert!(!counts(&Candidate {
+            visible: false,
+            ..base.clone()
+        }));
+        assert!(
+            !counts(&Candidate {
+                owned: true,
+                ..base.clone()
+            }),
+            "a dialog"
+        );
+        assert!(!counts(&Candidate {
+            tool_window: true,
+            ..base.clone()
+        }));
         assert!(!counts(&app("SomeHelper", "  ")), "untitled");
         assert!(
-            counts(&Candidate { app_window: true, ..app("SomeApp", "") }),
+            counts(&Candidate {
+                app_window: true,
+                ..app("SomeApp", "")
+            }),
             "untitled but asks for a taskbar button"
         );
     }
@@ -298,7 +323,13 @@ mod tests {
     #[test]
     fn cloaked_windows_count_only_when_on_another_desktop() {
         let base = app("ApplicationFrameWindow", "Calculator");
-        assert!(!counts(&Candidate { cloaked: true, ..base.clone() }), "a suspended Store app");
+        assert!(
+            !counts(&Candidate {
+                cloaked: true,
+                ..base.clone()
+            }),
+            "a suspended Store app"
+        );
         assert!(counts(&Candidate {
             cloaked: true,
             on_other_desktop: true,
@@ -308,7 +339,10 @@ mod tests {
 
     #[test]
     fn win32_rects_become_x_y_w_h() {
-        assert_eq!(rect(-1920, 0, 0, 1080), Rect::new(-1920.0, 0.0, 1920.0, 1080.0));
+        assert_eq!(
+            rect(-1920, 0, 0, 1080),
+            Rect::new(-1920.0, 0.0, 1920.0, 1080.0)
+        );
     }
 
     #[test]
@@ -344,17 +378,30 @@ mod tests {
         let i = insets(&outer, &drawn);
         assert_eq!(i, (7.0, 0.0, 7.0, 7.0));
         assert_eq!(trim(outer, i), drawn);
-        assert_eq!(trim(outer, (-5.0, 0.0, 7.0, 7.0)), outer, "nonsense insets are ignored");
-        assert_eq!(trim(Rect::new(0.0, 0.0, 10.0, 10.0), (7.0, 0.0, 7.0, 7.0)), Rect::new(0.0, 0.0, 10.0, 10.0));
+        assert_eq!(
+            trim(outer, (-5.0, 0.0, 7.0, 7.0)),
+            outer,
+            "nonsense insets are ignored"
+        );
+        assert_eq!(
+            trim(Rect::new(0.0, 0.0, 10.0, 10.0), (7.0, 0.0, 7.0, 7.0)),
+            Rect::new(0.0, 0.0, 10.0, 10.0)
+        );
     }
 
     #[test]
     fn store_apps_are_found_by_their_package_folder() {
         let exe = r"C:\Program Files\WindowsApps\5319275A.WhatsAppDesktop_2.2644.101.0_x64__cv1g1gvanyjgm\WhatsApp.Root.exe";
         let (folder, full) = store_package(exe).unwrap();
-        assert_eq!(full, "5319275A.WhatsAppDesktop_2.2644.101.0_x64__cv1g1gvanyjgm");
+        assert_eq!(
+            full,
+            "5319275A.WhatsAppDesktop_2.2644.101.0_x64__cv1g1gvanyjgm"
+        );
         assert!(folder.ends_with(full));
-        assert_eq!(store_package(r"C:\Program Files\Google\Chrome\Application\chrome.exe"), None);
+        assert_eq!(
+            store_package(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+            None
+        );
     }
 
     #[test]
@@ -362,8 +409,12 @@ mod tests {
         let xml = r#"<Package><Properties><DisplayName>WhatsApp</DisplayName><PublisherDisplayName>WhatsApp Inc.</PublisherDisplayName></Properties>
             <Applications><Application><uap:VisualElements DisplayName="ms-resource:Other"/></Application></Applications></Package>"#;
         assert_eq!(manifest_display_name(xml), Some("WhatsApp"));
-        let xml = "<Properties>\n  <DisplayName>ms-resource:AppDisplayName</DisplayName>\n</Properties>";
-        assert_eq!(manifest_display_name(xml), Some("ms-resource:AppDisplayName"));
+        let xml =
+            "<Properties>\n  <DisplayName>ms-resource:AppDisplayName</DisplayName>\n</Properties>";
+        assert_eq!(
+            manifest_display_name(xml),
+            Some("ms-resource:AppDisplayName")
+        );
         assert_eq!(manifest_display_name("<Package/>"), None);
     }
 
@@ -382,13 +433,33 @@ mod tests {
             "AppList.targetsize-48_contrast-black.png",
             "AppListBig.png",
         ];
-        assert_eq!(best_logo("AppList", &files), Some("AppList.targetsize-48_altform-unplated.png"));
         assert_eq!(
-            best_logo("AppList", &["AppList.scale-100.png", "AppList.scale-200.png", "AppList.targetsize-24.png"]),
+            best_logo("AppList", &files),
+            Some("AppList.targetsize-48_altform-unplated.png")
+        );
+        assert_eq!(
+            best_logo(
+                "AppList",
+                &[
+                    "AppList.scale-100.png",
+                    "AppList.scale-200.png",
+                    "AppList.targetsize-24.png"
+                ]
+            ),
             Some("AppList.targetsize-24.png")
         );
-        assert_eq!(best_logo("AppList", &["AppList.scale-100.png", "AppList.scale-200.png"]), Some("AppList.scale-200.png"));
-        assert_eq!(best_logo("applist", &["AppList.png"]), Some("AppList.png"), "case doesn't matter");
+        assert_eq!(
+            best_logo(
+                "AppList",
+                &["AppList.scale-100.png", "AppList.scale-200.png"]
+            ),
+            Some("AppList.scale-200.png")
+        );
+        assert_eq!(
+            best_logo("applist", &["AppList.png"]),
+            Some("AppList.png"),
+            "case doesn't matter"
+        );
         assert_eq!(best_logo("AppList", &["AppListBig.png", "Other.png"]), None);
     }
 
@@ -399,7 +470,10 @@ mod tests {
             indirect_string(full, "AppStoreName"),
             "@{Microsoft.WindowsCalculator_11.2502.2.0_x64__8wekyb3d8bbwe?ms-resource://Microsoft.WindowsCalculator/resources/AppStoreName}"
         );
-        assert!(indirect_string(full, "/Resources/AppName").ends_with("?ms-resource://Microsoft.WindowsCalculator/Resources/AppName}"));
+        assert!(
+            indirect_string(full, "/Resources/AppName")
+                .ends_with("?ms-resource://Microsoft.WindowsCalculator/Resources/AppName}")
+        );
         assert!(indirect_string(full, "//Other/x").ends_with("?ms-resource://Other/x}"));
     }
 
@@ -407,7 +481,10 @@ mod tests {
     fn full_screen_means_captionless_and_covering_the_monitor() {
         let monitor = Rect::new(-1920.0, 0.0, 1920.0, 1080.0);
         assert!(is_full_screen(&monitor, &monitor, false));
-        assert!(!is_full_screen(&monitor, &monitor, true), "maximized with a title bar");
+        assert!(
+            !is_full_screen(&monitor, &monitor, true),
+            "maximized with a title bar"
+        );
         assert!(!is_full_screen(
             &Rect::new(-1920.0, 0.0, 1920.0, 1032.0),
             &monitor,
@@ -420,14 +497,21 @@ mod tests {
         let a = r"\\?\DISPLAY#DEL41B4#5&1&0&UID4353#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}";
         let b = r"\\?\DISPLAY#GSM5B7F#5&1&0&UID4357#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}";
         assert_eq!(display_id(&[a], r"\\.\DISPLAY1"), a);
-        assert_eq!(display_id(&[b, a], r"\\.\DISPLAY1"), display_id(&[a, b], r"\\.\DISPLAY1"), "mirrored");
+        assert_eq!(
+            display_id(&[b, a], r"\\.\DISPLAY1"),
+            display_id(&[a, b], r"\\.\DISPLAY1"),
+            "mirrored"
+        );
         assert_eq!(display_id(&[""], r"\\.\DISPLAY3"), r"\\.\DISPLAY3");
         assert_eq!(display_id(&[], r"\\.\DISPLAY3"), r"\\.\DISPLAY3");
     }
 
     #[test]
     fn display_names() {
-        assert_eq!(display_name("DELL U2720Q", false, r"\\.\DISPLAY1"), "DELL U2720Q");
+        assert_eq!(
+            display_name("DELL U2720Q", false, r"\\.\DISPLAY1"),
+            "DELL U2720Q"
+        );
         assert_eq!(display_name("", true, r"\\.\DISPLAY1"), "Built-in display");
         assert_eq!(display_name(" ", false, r"\\.\DISPLAY12"), "Display 12");
         assert_eq!(display_name("", false, "odd"), "Display");
@@ -437,9 +521,13 @@ mod tests {
     fn guids_read_from_registry_bytes() {
         // {6B8A1A40-5E3A-4F0B-9B8C-0D1E2F304152} as Windows stores it.
         let bytes: [u8; 16] = [
-            0x40, 0x1A, 0x8A, 0x6B, 0x3A, 0x5E, 0x0B, 0x4F, 0x9B, 0x8C, 0x0D, 0x1E, 0x2F, 0x30, 0x41, 0x52,
+            0x40, 0x1A, 0x8A, 0x6B, 0x3A, 0x5E, 0x0B, 0x4F, 0x9B, 0x8C, 0x0D, 0x1E, 0x2F, 0x30,
+            0x41, 0x52,
         ];
-        assert_eq!(guid_from_bytes(&bytes), 0x6B8A1A40_5E3A_4F0B_9B8C_0D1E2F304152);
+        assert_eq!(
+            guid_from_bytes(&bytes),
+            0x6B8A1A40_5E3A_4F0B_9B8C_0D1E2F304152
+        );
         let mut two = bytes.to_vec();
         two.extend_from_slice(&[0xFF; 16]);
         two.extend_from_slice(&[1, 2, 3]); // a stray tail is ignored
@@ -450,8 +538,16 @@ mod tests {
     fn desktops_number_in_task_view_order_then_as_seen() {
         let (a, b, c, d) = (0xA, 0xB, 0xC, 0xD);
         assert_eq!(number_desktops(&[b, a, c], &[a, c]), vec![b, a, c]);
-        assert_eq!(number_desktops(&[a, b], &[d, b]), vec![a, b, d], "a desktop the registry missed");
-        assert_eq!(number_desktops(&[], &[c, a, c, 0]), vec![c, a], "no registry: first seen, no zero GUID");
+        assert_eq!(
+            number_desktops(&[a, b], &[d, b]),
+            vec![a, b, d],
+            "a desktop the registry missed"
+        );
+        assert_eq!(
+            number_desktops(&[], &[c, a, c, 0]),
+            vec![c, a],
+            "no registry: first seen, no zero GUID"
+        );
     }
 
     #[test]

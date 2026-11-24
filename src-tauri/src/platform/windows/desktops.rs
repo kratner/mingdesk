@@ -11,7 +11,9 @@
 
 use super::rules;
 use ::windows::Win32::Foundation::HWND;
-use ::windows::Win32::System::Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx};
+use ::windows::Win32::System::Com::{
+    CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
+};
 use ::windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_BINARY, RegGetValueW};
 use ::windows::Win32::UI::Shell::{IVirtualDesktopManager, VirtualDesktopManager};
 use ::windows::core::w;
@@ -29,14 +31,18 @@ impl Vdm {
         // keeps its apartment). MingDesk never leaves COM on these threads.
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            CoCreateInstance(&VirtualDesktopManager, None, CLSCTX_ALL).ok().map(Vdm)
+            CoCreateInstance(&VirtualDesktopManager, None, CLSCTX_ALL)
+                .ok()
+                .map(Vdm)
         }
     }
 
     /// None when Windows won't say (a window that's closing, or one the manager doesn't track).
     pub fn on_current(&self, h: HWND) -> Option<bool> {
         // SAFETY: a plain query on a window handle.
-        unsafe { self.0.IsWindowOnCurrentVirtualDesktop(h) }.ok().map(|b| b.as_bool())
+        unsafe { self.0.IsWindowOnCurrentVirtualDesktop(h) }
+            .ok()
+            .map(|b| b.as_bool())
     }
 
     /// The desktop's GUID; None for a window shown on every desktop, or when Windows won't say.
@@ -51,9 +57,17 @@ fn registry_binary(value: ::windows::core::PCWSTR) -> Option<Vec<u8>> {
     let mut len = 0u32;
     // SAFETY: first call asks for the size; the second fills a buffer of that size.
     unsafe {
-        RegGetValueW(HKEY_CURRENT_USER, KEY, value, RRF_RT_REG_BINARY, None, None, Some(&mut len))
-            .ok()
-            .ok()?;
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            KEY,
+            value,
+            RRF_RT_REG_BINARY,
+            None,
+            None,
+            Some(&mut len),
+        )
+        .ok()
+        .ok()?;
         let mut buf = vec![0u8; len as usize];
         RegGetValueW(
             HKEY_CURRENT_USER,

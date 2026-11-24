@@ -8,17 +8,21 @@ use super::desktops::Vdm;
 use super::rules::{self, Candidate};
 use crate::platform::Rect;
 use ::windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, MAX_PATH, RECT};
-use ::windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
-use ::windows::Win32::Storage::FileSystem::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
-use ::windows::Win32::UI::Shell::SHLoadIndirectString;
+use ::windows::Win32::Graphics::Dwm::{
+    DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute,
+};
+use ::windows::Win32::Storage::FileSystem::{
+    GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
+};
 use ::windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
+use ::windows::Win32::UI::Shell::SHLoadIndirectString;
 use ::windows::Win32::UI::WindowsAndMessaging::{
     EnumChildWindows, EnumWindows, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, GetClassNameW, GetWindow,
     GetWindowLongPtrW, GetWindowPlacement, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
-    GetWindowThreadProcessId, IsIconic, IsWindowVisible, WINDOWPLACEMENT, WS_CAPTION, WS_EX_APPWINDOW,
-    WS_EX_TOOLWINDOW,
+    GetWindowThreadProcessId, IsIconic, IsWindowVisible, WINDOWPLACEMENT, WS_CAPTION,
+    WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 use ::windows::core::{BOOL, PCWSTR, PWSTR};
 use std::collections::HashMap;
@@ -99,8 +103,13 @@ fn cloaked(h: HWND) -> bool {
     let mut value = 0u32;
     // SAFETY: DWMWA_CLOAKED fills a DWORD.
     unsafe {
-        DwmGetWindowAttribute(h, DWMWA_CLOAKED, &mut value as *mut _ as *mut _, size_of::<u32>() as u32)
-            .is_ok()
+        DwmGetWindowAttribute(
+            h,
+            DWMWA_CLOAKED,
+            &mut value as *mut _ as *mut _,
+            size_of::<u32>() as u32,
+        )
+        .is_ok()
             && value != 0
     }
 }
@@ -121,7 +130,9 @@ pub fn frame_of(h: HWND) -> Option<Rect> {
             GetWindowRect(h, &mut outer),
         )
     };
-    let outer = win.ok().map(|_| rules::rect(outer.left, outer.top, outer.right, outer.bottom));
+    let outer = win
+        .ok()
+        .map(|_| rules::rect(outer.left, outer.top, outer.right, outer.bottom));
     match dwm {
         Ok(()) => {
             let drawn = rules::rect(drawn.left, drawn.top, drawn.right, drawn.bottom);
@@ -137,7 +148,8 @@ pub fn frame_of(h: HWND) -> Option<Rect> {
 /// Each window's invisible borders as last measured while it was visible, and the latest measured on any window
 /// (for one that was already minimized when MingDesk started).
 fn insets_store() -> &'static Mutex<(HashMap<u32, rules::Insets>, Option<rules::Insets>)> {
-    static INSETS: OnceLock<Mutex<(HashMap<u32, rules::Insets>, Option<rules::Insets>)>> = OnceLock::new();
+    static INSETS: OnceLock<Mutex<(HashMap<u32, rules::Insets>, Option<rules::Insets>)>> =
+        OnceLock::new();
     INSETS.get_or_init(Default::default)
 }
 
@@ -196,7 +208,13 @@ fn store_app_pid(h: HWND, frame_pid: u32) -> Option<u32> {
         found: None,
     };
     // SAFETY: the callback only writes into `search`, which outlives the call.
-    let _ = unsafe { EnumChildWindows(Some(h), Some(find_core_window), LPARAM(&mut search as *mut _ as isize)) };
+    let _ = unsafe {
+        EnumChildWindows(
+            Some(h),
+            Some(find_core_window),
+            LPARAM(&mut search as *mut _ as isize),
+        )
+    };
     search.found
 }
 
@@ -233,7 +251,11 @@ pub fn describe(h: HWND, z: u32, vdm: Option<&Vdm>) -> Option<Raw> {
     if !rules::counts(&candidate) {
         return None;
     }
-    let frame = if minimized { restored_frame(h)? } else { frame_of(h)? };
+    let frame = if minimized {
+        restored_frame(h)?
+    } else {
+        frame_of(h)?
+    };
     let frame_pid = pid_of(h);
     let pid = if class == "ApplicationFrameWindow" {
         store_app_pid(h, frame_pid).unwrap_or(frame_pid)
@@ -261,7 +283,12 @@ pub fn exe_path(pid: u32) -> Option<String> {
         let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
         let mut buf = [0u16; MAX_PATH as usize * 4];
         let mut len = buf.len() as u32;
-        let ok = QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len);
+        let ok = QueryFullProcessImageNameW(
+            process,
+            PROCESS_NAME_WIN32,
+            PWSTR(buf.as_mut_ptr()),
+            &mut len,
+        );
         let _ = CloseHandle(process);
         ok.ok()?;
         Some(String::from_utf16_lossy(&buf[..len as usize]))
@@ -283,11 +310,24 @@ fn file_description(path: &str) -> Option<String> {
             return None;
         }
         let mut block = vec![0u8; size as usize];
-        GetFileVersionInfoW(PCWSTR(wpath.as_ptr()), None, size, block.as_mut_ptr() as *mut _).ok()?;
+        GetFileVersionInfoW(
+            PCWSTR(wpath.as_ptr()),
+            None,
+            size,
+            block.as_mut_ptr() as *mut _,
+        )
+        .ok()?;
         let mut langs: Vec<String> = Vec::new();
         let (mut ptr, mut len) = (std::ptr::null_mut(), 0u32);
         let key = to_wide(r"\VarFileInfo\Translation");
-        if VerQueryValueW(block.as_ptr() as *const _, PCWSTR(key.as_ptr()), &mut ptr, &mut len).as_bool() {
+        if VerQueryValueW(
+            block.as_ptr() as *const _,
+            PCWSTR(key.as_ptr()),
+            &mut ptr,
+            &mut len,
+        )
+        .as_bool()
+        {
             let pairs = std::slice::from_raw_parts(ptr as *const u16, len as usize / 2);
             for pair in pairs.chunks_exact(2) {
                 langs.push(format!("{:04x}{:04x}", pair[0], pair[1]));
@@ -297,7 +337,13 @@ fn file_description(path: &str) -> Option<String> {
         for lang in langs {
             let key = to_wide(&format!(r"\StringFileInfo\{lang}\FileDescription"));
             let (mut ptr, mut len) = (std::ptr::null_mut(), 0u32);
-            if VerQueryValueW(block.as_ptr() as *const _, PCWSTR(key.as_ptr()), &mut ptr, &mut len).as_bool()
+            if VerQueryValueW(
+                block.as_ptr() as *const _,
+                PCWSTR(key.as_ptr()),
+                &mut ptr,
+                &mut len,
+            )
+            .as_bool()
                 && len > 1
             {
                 let text = std::slice::from_raw_parts(ptr as *const u16, len as usize);
@@ -338,11 +384,13 @@ pub fn app_name(path: &str) -> String {
     if let Some(n) = names.lock().unwrap().get(path) {
         return n.clone();
     }
-    let name = store_app_name(path).or_else(|| file_description(path)).unwrap_or_else(|| {
-        Path::new(path)
-            .file_stem()
-            .map_or_else(|| path.to_string(), |s| s.to_string_lossy().into_owned())
-    });
+    let name = store_app_name(path)
+        .or_else(|| file_description(path))
+        .unwrap_or_else(|| {
+            Path::new(path)
+                .file_stem()
+                .map_or_else(|| path.to_string(), |s| s.to_string_lossy().into_owned())
+        });
     names.lock().unwrap().insert(path.to_string(), name.clone());
     name
 }

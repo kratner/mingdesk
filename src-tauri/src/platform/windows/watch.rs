@@ -47,7 +47,10 @@ pub fn start(sink: Sink) {
 /// cursors and scrollbars, and create/show/hide for every child control: only the window object of a top-level
 /// window counts.
 fn about_a_window(event: u32, hwnd: HWND, id_object: i32, id_child: i32) -> bool {
-    if event == EVENT_SYSTEM_FOREGROUND || event == EVENT_SYSTEM_MINIMIZESTART || event == EVENT_SYSTEM_MINIMIZEEND {
+    if event == EVENT_SYSTEM_FOREGROUND
+        || event == EVENT_SYSTEM_MINIMIZESTART
+        || event == EVENT_SYSTEM_MINIMIZEEND
+    {
         return true;
     }
     if id_object != OBJID_WINDOW.0 || id_child != CHILDID_SELF as i32 || hwnd.is_invalid() {

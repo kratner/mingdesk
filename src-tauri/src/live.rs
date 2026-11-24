@@ -76,7 +76,8 @@ impl Live {
 pub fn load(path: &Path) -> Known {
     std::fs::read(path)
         .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
+        .and_then(|b| serde_json::from_slice::<Known>(&b).ok())
+        .map(Known::tidy)
         .unwrap_or_default()
 }
 

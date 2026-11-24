@@ -120,14 +120,23 @@ fn export_desk(
         .map_err(|e| format!("No Downloads folder to save into: {e}"))?;
     let name: String = stamp
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let path = downloads.join(format!("MingDesk desk {name}.json"));
     let text = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
     std::fs::write(&path, text).map_err(|e| format!("Couldn't save {}: {e}", path.display()))?;
     log::event(&format!("exported the desk to {}", path.display()));
     #[cfg(target_os = "macos")]
-    let _ = std::process::Command::new("open").arg("-R").arg(&path).spawn();
+    let _ = std::process::Command::new("open")
+        .arg("-R")
+        .arg(&path)
+        .spawn();
     // Opens a File Explorer window with the file selected. The comma belongs to the switch, so the path is
     // passed raw rather than as a separately quoted argument.
     #[cfg(target_os = "windows")]
@@ -143,7 +152,10 @@ fn export_desk(
 /// A short command's trimmed output (for the export's OS version and Mac model), or None.
 #[cfg(not(target_os = "windows"))]
 fn command_output(program: &str, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new(program).args(args).output().ok()?;
+    let out = std::process::Command::new(program)
+        .args(args)
+        .output()
+        .ok()?;
     out.status
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
@@ -163,9 +175,16 @@ fn base64(bytes: &[u8]) -> String {
     const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
-        let n = chunk.iter().enumerate().fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
         for i in 0..4 {
-            out.push(if i <= chunk.len() { ABC[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+            out.push(if i <= chunk.len() {
+                ABC[(n >> (18 - 6 * i) & 63) as usize] as char
+            } else {
+                '='
+            });
         }
     }
     out

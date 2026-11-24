@@ -6,8 +6,8 @@
 
 use super::rules;
 use ::windows::Win32::Graphics::Gdi::{
-    BI_RGB, BITMAP, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC, DeleteObject,
-    GetDIBits, GetObjectW, HBITMAP, HGDIOBJ,
+    BI_RGB, BITMAP, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC,
+    DeleteObject, GetDIBits, GetObjectW, HBITMAP, HGDIOBJ,
 };
 use ::windows::Win32::UI::Shell::SHDefExtractIconW;
 use ::windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO};
@@ -48,7 +48,9 @@ fn exe_icon(exe: &str) -> Option<Vec<u8>> {
     let mut large = HICON::default();
     // SAFETY: asks for one icon at SIZE px; the icon is destroyed after it's drawn.
     unsafe {
-        SHDefExtractIconW(&HSTRING::from(exe), 0, 0, Some(&mut large), None, SIZE).ok().ok()?;
+        SHDefExtractIconW(&HSTRING::from(exe), 0, 0, Some(&mut large), None, SIZE)
+            .ok()
+            .ok()?;
         if large.is_invalid() {
             return None;
         }
@@ -62,7 +64,14 @@ fn exe_icon(exe: &str) -> Option<Vec<u8>> {
 unsafe fn pixels(bitmap: HBITMAP) -> Option<(u32, u32, Vec<u8>)> {
     let mut info = BITMAP::default();
     // SAFETY: fills a BITMAP from a bitmap handle the caller owns.
-    if unsafe { GetObjectW(HGDIOBJ(bitmap.0), size_of::<BITMAP>() as i32, Some(&mut info as *mut _ as *mut _)) } == 0 {
+    if unsafe {
+        GetObjectW(
+            HGDIOBJ(bitmap.0),
+            size_of::<BITMAP>() as i32,
+            Some(&mut info as *mut _ as *mut _),
+        )
+    } == 0
+    {
         return None;
     }
     let (w, h) = (info.bmWidth as u32, info.bmHeight.unsigned_abs());
@@ -80,7 +89,15 @@ unsafe fn pixels(bitmap: HBITMAP) -> Option<(u32, u32, Vec<u8>)> {
     // SAFETY: the buffer holds w×h 32-bit pixels, as the header asks for; the DC is deleted before returning.
     unsafe {
         let dc = CreateCompatibleDC(None);
-        let lines = GetDIBits(dc, bitmap, 0, h, Some(buf.as_mut_ptr() as *mut _), &mut header, DIB_RGB_COLORS);
+        let lines = GetDIBits(
+            dc,
+            bitmap,
+            0,
+            h,
+            Some(buf.as_mut_ptr() as *mut _),
+            &mut header,
+            DIB_RGB_COLORS,
+        );
         let _ = DeleteDC(dc);
         (lines == h as i32).then_some((w, h, buf))
     }

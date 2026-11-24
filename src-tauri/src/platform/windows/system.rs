@@ -1,8 +1,12 @@
 //! What Export desk says about this PC: the Windows version and the PC's model, from the registry (no WMI, no
 //! child processes).
 
-use ::windows::Win32::System::Registry::{HKEY, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegGetValueW};
-use ::windows::Win32::System::SystemInformation::{FIRMWARE_TABLE_PROVIDER, GetSystemFirmwareTable};
+use ::windows::Win32::System::Registry::{
+    HKEY, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegGetValueW,
+};
+use ::windows::Win32::System::SystemInformation::{
+    FIRMWARE_TABLE_PROVIDER, GetSystemFirmwareTable,
+};
 use ::windows::core::{HSTRING, PCWSTR};
 
 const CURRENT_VERSION: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
@@ -13,9 +17,17 @@ fn text(root: HKEY, key: &str, value: &str) -> Option<String> {
     let mut len = 0u32;
     // SAFETY: first call asks for the size in bytes; the second fills a buffer of that size.
     unsafe {
-        RegGetValueW(root, PCWSTR(key.as_ptr()), PCWSTR(value.as_ptr()), RRF_RT_REG_SZ, None, None, Some(&mut len))
-            .ok()
-            .ok()?;
+        RegGetValueW(
+            root,
+            PCWSTR(key.as_ptr()),
+            PCWSTR(value.as_ptr()),
+            RRF_RT_REG_SZ,
+            None,
+            None,
+            Some(&mut len),
+        )
+        .ok()
+        .ok()?;
         let mut buf = vec![0u16; len as usize / 2 + 1];
         RegGetValueW(
             root,
@@ -85,9 +97,12 @@ pub fn os_version() -> Option<String> {
 /// or the motherboard's on a self-built PC whose system strings are placeholders. The registry copy of these
 /// strings is tried last: it's empty on some PCs (Keith's, 2026-11-23).
 pub fn model() -> Option<String> {
-    smbios_table()
-        .and_then(|t| smbios_model(&t))
-        .or_else(|| join(text(HKEY_LOCAL_MACHINE, BIOS, "SystemManufacturer"), text(HKEY_LOCAL_MACHINE, BIOS, "SystemProductName")))
+    smbios_table().and_then(|t| smbios_model(&t)).or_else(|| {
+        join(
+            text(HKEY_LOCAL_MACHINE, BIOS, "SystemManufacturer"),
+            text(HKEY_LOCAL_MACHINE, BIOS, "SystemProductName"),
+        )
+    })
 }
 
 fn join(maker: Option<String>, product: Option<String>) -> Option<String> {
@@ -156,7 +171,10 @@ pub fn smbios_model(raw: &[u8]) -> Option<String> {
         }
         let string = |index: usize| -> Option<String> {
             let i = *formatted.get(index)? as usize;
-            strings.get(i.checked_sub(1)?).filter(|s| !placeholder(s)).cloned()
+            strings
+                .get(i.checked_sub(1)?)
+                .filter(|s| !placeholder(s))
+                .cloned()
         };
         match kind {
             1 => system = (string(4), string(5)),
@@ -206,15 +224,26 @@ mod tests {
         let t = table(&[
             structure(0, &[1, 2], &["Microsoft Corporation", "1.2.3"]), // BIOS
             structure(1, &[1, 2, 0], &["Microsoft Corporation", "Surface Pro 9"]),
-            structure(2, &[1, 2], &["Microsoft Corporation", "Surface Pro 9 board"]),
+            structure(
+                2,
+                &[1, 2],
+                &["Microsoft Corporation", "Surface Pro 9 board"],
+            ),
         ]);
-        assert_eq!(smbios_model(&t).as_deref(), Some("Microsoft Corporation Surface Pro 9"));
+        assert_eq!(
+            smbios_model(&t).as_deref(),
+            Some("Microsoft Corporation Surface Pro 9")
+        );
     }
 
     #[test]
     fn a_self_built_pc_falls_back_to_its_motherboard() {
         let t = table(&[
-            structure(1, &[1, 2, 0], &["To Be Filled By O.E.M.", "To Be Filled By O.E.M."]),
+            structure(
+                1,
+                &[1, 2, 0],
+                &["To Be Filled By O.E.M.", "To Be Filled By O.E.M."],
+            ),
             structure(2, &[1, 2], &["GreatWall", "B760M-G"]),
         ]);
         assert_eq!(smbios_model(&t).as_deref(), Some("GreatWall B760M-G"));

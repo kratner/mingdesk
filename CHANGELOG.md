@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9 (2026-11-24): M1 preview
+
+- A display that reports no name (a virtual screen, or one caught mid-switch as the lid closes) is called
+  "Display N" instead of nothing, and a setup already saved with no name takes its displays' names.
+
 ## 0.2.8 (2026-11-24): M1 preview
 
 - **Apps' real icons** in the List and Desk views, on the Mac and Windows, instead of each app's initial. On the

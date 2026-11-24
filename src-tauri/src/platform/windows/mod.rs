@@ -71,7 +71,11 @@ pub fn read() -> Snapshot {
     let ordered = rules::number_desktops(&desktops::registry_order(), &seen);
     let current = desktops::registry_current()
         .filter(|g| ordered.contains(g))
-        .or_else(|| raws.iter().find(|r| r.on_current_desktop).and_then(|r| r.desktop));
+        .or_else(|| {
+            raws.iter()
+                .find(|r| r.on_current_desktop)
+                .and_then(|r| r.desktop)
+        });
     let desktop_list: Vec<Desktop> = if ordered.len() > 1 {
         monitors
             .iter()
@@ -100,7 +104,9 @@ pub fn read() -> Snapshot {
                         return (list::exe_path(own), "MingDesk".to_string());
                     }
                     let path = list::exe_path(r.pid);
-                    let name = path.as_deref().map_or_else(|| r.class.clone(), list::app_name);
+                    let name = path
+                        .as_deref()
+                        .map_or_else(|| r.class.clone(), list::app_name);
                     (path, name)
                 })
                 .clone();
@@ -110,9 +116,13 @@ pub fn read() -> Snapshot {
                 monitors
                     .iter()
                     .max_by(|a, b| {
-                        a.work.overlap(&r.frame).total_cmp(&b.work.overlap(&r.frame))
+                        a.work
+                            .overlap(&r.frame)
+                            .total_cmp(&b.work.overlap(&r.frame))
                     })
-                    .map_or(r.frame, |m| rules::workspace_to_screen(r.frame, &m.display.frame, &m.work))
+                    .map_or(r.frame, |m| {
+                        rules::workspace_to_screen(r.frame, &m.display.frame, &m.work)
+                    })
             } else {
                 r.frame
             };
@@ -130,7 +140,11 @@ pub fn read() -> Snapshot {
                 minimized: r.minimized,
                 full_screen,
                 on_current_desktop: r.on_current_desktop,
-                desktop: if ordered.len() > 1 { r.desktop.map(rules::desktop_key) } else { None },
+                desktop: if ordered.len() > 1 {
+                    r.desktop.map(rules::desktop_key)
+                } else {
+                    None
+                },
                 focused: r.id == foreground,
                 order: if r.minimized { STACK_REST + r.z } else { r.z },
             }
@@ -238,7 +252,9 @@ mod probe {
 
         let heard = Arc::new(Mutex::new(Vec::<(Instant, Change)>::new()));
         let log = heard.clone();
-        WinPlatform.watch(Arc::new(move |c| log.lock().unwrap().push((Instant::now(), c))));
+        WinPlatform.watch(Arc::new(move |c| {
+            log.lock().unwrap().push((Instant::now(), c))
+        }));
         sleep(Duration::from_millis(500));
         let step = |label: &str, act: &dyn Fn()| {
             heard.lock().unwrap().clear();
@@ -257,13 +273,21 @@ mod probe {
         let opened = step("open a", &|| open(a));
         wait_for(a, &|w| w.is_some());
         let wa = find(a).unwrap();
-        println!("  listed: app={:?} title={:?} frame={:?}", wa.app, wa.title, wa.frame);
+        println!(
+            "  listed: app={:?} title={:?} frame={:?}",
+            wa.app, wa.title, wa.frame
+        );
 
         let minimized = step("minimize a", &|| WinPlatform.minimize(wa.id).unwrap());
         wait_for(a, &|w| w.is_some_and(|w| w.minimized));
-        println!("  minimized frame (restored place): {:?}", find(a).unwrap().frame);
+        println!(
+            "  minimized frame (restored place): {:?}",
+            find(a).unwrap().frame
+        );
 
-        let focused = step("focus a (restores it)", &|| WinPlatform.focus(wa.id).unwrap());
+        let focused = step("focus a (restores it)", &|| {
+            WinPlatform.focus(wa.id).unwrap()
+        });
         wait_for(a, &|w| w.is_some_and(|w| !w.minimized && w.focused));
 
         let created = step("open b (new window noticed)", &|| open(b));
@@ -274,9 +298,14 @@ mod probe {
         // after first putting a in front.
         WinPlatform.focus(wa.id).unwrap();
         sleep(Duration::from_millis(300));
-        step("bring a, b forward in order", &|| actions::bring_forward(&[wa.id, wb.id]).unwrap());
+        step("bring a, b forward in order", &|| {
+            actions::bring_forward(&[wa.id, wb.id]).unwrap()
+        });
         let (oa, ob) = (find(a).unwrap(), find(b).unwrap());
-        assert!(ob.order < oa.order && ob.focused, "b in front of a and focused: a={oa:?} b={ob:?}");
+        assert!(
+            ob.order < oa.order && ob.focused,
+            "b in front of a and focused: a={oa:?} b={ob:?}"
+        );
 
         let closed = step("close a and b", &|| {
             WinPlatform.close(wa.id).unwrap();
@@ -300,14 +329,22 @@ mod probe {
         let snap = read();
         println!("snapshot took {:?}", started.elapsed());
         println!("os: {:?}\nmodel: {:?}", os_version(), model());
-        let mut apps: Vec<&str> = snap.windows.iter().filter_map(|w| w.app_id.as_deref()).collect();
+        let mut apps: Vec<&str> = snap
+            .windows
+            .iter()
+            .filter_map(|w| w.app_id.as_deref())
+            .collect();
         apps.sort();
         apps.dedup();
         for a in apps {
             let png = icons::icon(a);
             println!("icon {:>6} bytes  {a}", png.as_ref().map_or(0, Vec::len));
             if let (Some(png), Ok(dir)) = (png, std::env::var("MINGDESK_ICON_DIR")) {
-                let name = Path::new(a).file_stem().unwrap().to_string_lossy().into_owned();
+                let name = Path::new(a)
+                    .file_stem()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned();
                 std::fs::write(Path::new(&dir).join(format!("{name}.png")), png).unwrap();
             }
         }
@@ -316,7 +353,11 @@ mod probe {
             println!("  {} | {} | {:?} | main={}", d.name, d.id, d.frame, d.main);
         }
         println!("\nDesktops (listed under each display):");
-        for x in snap.desktops.iter().filter(|x| Some(&x.display) == snap.displays.first().map(|d| &d.id)) {
+        for x in snap
+            .desktops
+            .iter()
+            .filter(|x| Some(&x.display) == snap.displays.first().map(|d| &d.id))
+        {
             println!("  {} id={} current={}", x.index, x.id, x.current);
         }
         println!("\nWindows (front to back):");

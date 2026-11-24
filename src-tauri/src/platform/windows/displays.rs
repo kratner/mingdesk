@@ -135,7 +135,8 @@ pub fn list() -> Vec<Monitor> {
             let gdi = wide(&info.szDevice);
             let m = info.monitorInfo;
             let output = outputs.get(&gdi);
-            let paths: Vec<&str> = output.map_or(Vec::new(), |o| o.paths.iter().map(String::as_str).collect());
+            let paths: Vec<&str> =
+                output.map_or(Vec::new(), |o| o.paths.iter().map(String::as_str).collect());
             Some(Monitor {
                 display: Display {
                     id: rules::display_id(&paths, &gdi),
@@ -144,7 +145,12 @@ pub fn list() -> Vec<Monitor> {
                         output.is_some_and(|o| o.internal),
                         &gdi,
                     ),
-                    frame: rules::rect(m.rcMonitor.left, m.rcMonitor.top, m.rcMonitor.right, m.rcMonitor.bottom),
+                    frame: rules::rect(
+                        m.rcMonitor.left,
+                        m.rcMonitor.top,
+                        m.rcMonitor.right,
+                        m.rcMonitor.bottom,
+                    ),
                     main: m.dwFlags & PRIMARY != 0,
                 },
                 work: rules::rect(m.rcWork.left, m.rcWork.top, m.rcWork.right, m.rcWork.bottom),

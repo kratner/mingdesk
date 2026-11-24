@@ -152,6 +152,37 @@ impl Known {
         self.setups.len() != before
     }
 
+    /// Mends what older versions saved: a display remembered with an empty name (macOS can give one, see
+    /// appkit.rs) gets "Display N", and a setup named after it gets its displays' names.
+    pub fn tidy(mut self) -> Self {
+        for (i, d) in self.displays.iter_mut().enumerate() {
+            if d.name.trim().is_empty() {
+                d.name = format!("Display {}", i + 1);
+            }
+        }
+        let names: Vec<(String, String)> = self
+            .setups
+            .iter()
+            .filter(|s| s.name.trim().is_empty())
+            .map(|s| {
+                (
+                    s.id.clone(),
+                    s.displays
+                        .iter()
+                        .map(|id| self.name_of(id))
+                        .collect::<Vec<_>>()
+                        .join(" + "),
+                )
+            })
+            .collect();
+        for (id, name) in names {
+            if let Some(s) = self.setups.iter_mut().find(|s| s.id == id) {
+                s.name = name;
+            }
+        }
+        self
+    }
+
     fn add_setup(&mut self, set: Vec<String>) {
         let names: Vec<String> = set.iter().map(|id| self.name_of(id)).collect();
         self.setups.push(Setup {
@@ -723,6 +754,24 @@ mod tests {
             .map(|d| d.id.as_str())
             .collect();
         assert_eq!(ghosts, ["left"]);
+    }
+
+    #[test]
+    fn tidy_names_blank_displays_and_setups() {
+        let mut known = Known::default();
+        let mut blank = display("virtual", LAPTOP, true);
+        blank.name = String::new();
+        known.remember(&[blank]);
+        assert_eq!(known.setups[0].name, "");
+        let known = known.tidy();
+        assert_eq!(known.displays[0].name, "Display 1");
+        assert_eq!(known.setups[0].name, "Display 1");
+        // A named setup keeps its name.
+        let mut k = Known::default();
+        k.remember(&[display("laptop", LAPTOP, true)]);
+        let id = k.setups[0].id.clone();
+        k.rename_setup(&id, "Home");
+        assert_eq!(k.tidy().setups[0].name, "Home");
     }
 
     #[test]

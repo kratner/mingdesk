@@ -56,7 +56,10 @@ pub fn icon(bundle_id: &str) -> Option<Vec<u8>> {
         return hit.clone();
     }
     let png = autoreleasepool(|_| draw(bundle_id));
-    cache.lock().unwrap().insert(bundle_id.to_string(), png.clone());
+    cache
+        .lock()
+        .unwrap()
+        .insert(bundle_id.to_string(), png.clone());
     png
 }
 
@@ -102,7 +105,8 @@ fn draw(bundle_id: &str) -> Option<Vec<u8>> {
             bitsPerPixel: 0isize
         ];
         let rep: Retained<AnyObject> = Retained::from_raw(rep)?;
-        let context: *mut AnyObject = msg_send![context_class, graphicsContextWithBitmapImageRep: &*rep];
+        let context: *mut AnyObject =
+            msg_send![context_class, graphicsContextWithBitmapImageRep: &*rep];
         if context.is_null() {
             return None;
         }
@@ -116,11 +120,13 @@ fn draw(bundle_id: &str) -> Option<Vec<u8>> {
             origin: Point { x: 0.0, y: 0.0 },
             size: Size { w: 0.0, h: 0.0 },
         };
-        let () = msg_send![image, drawInRect: whole, fromRect: zero, operation: COPY, fraction: 1.0f64];
+        let () =
+            msg_send![image, drawInRect: whole, fromRect: zero, operation: COPY, fraction: 1.0f64];
         let () = msg_send![context_class, restoreGraphicsState];
 
         let no_properties: *mut AnyObject = msg_send![dictionary_class, dictionary];
-        let data: *mut AnyObject = msg_send![&*rep, representationUsingType: PNG, properties: no_properties];
+        let data: *mut AnyObject =
+            msg_send![&*rep, representationUsingType: PNG, properties: no_properties];
         if data.is_null() {
             return None;
         }
