@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.8 (2026-11-24): M1 preview
+
+- **Apps' real icons** in the List and Desk views, on the Mac and Windows, instead of each app's initial. On the
+  Mac, the icon Finder shows; on Windows, the app's own icon, and a Store app's logo as the taskbar shows it.
+  An app without an icon keeps its initial.
+- Windows: Store apps are named as the Start menu names them ("WhatsApp", not "WhatsApp.Root").
+- Windows: a minimized window is drawn where it will come back, without the invisible borders around it.
+
 ## 0.2.7 (2026-11-23): M1 preview, now on Windows too
 
 - **MingDesk for Windows** (Windows 10 and 11, 64-bit): the first Windows build, an installer next to the .dmg.
