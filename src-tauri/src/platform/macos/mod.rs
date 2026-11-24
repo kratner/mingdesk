@@ -14,6 +14,7 @@ mod ax;
 mod cf;
 mod cg;
 mod ffi;
+mod icons;
 mod spaces;
 mod watch;
 
@@ -337,6 +338,10 @@ impl Platform for MacPlatform {
 
     fn watch(&self, sink: Sink) {
         watch::start(sink);
+    }
+
+    fn app_icon(&self, app_id: &str) -> Option<Vec<u8>> {
+        icons::icon(app_id)
     }
 }
 
