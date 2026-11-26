@@ -130,7 +130,9 @@ export default function App() {
           {exported && <span role="status">{exported}</span>}
         </span>
         <span className="made">
-          <FourOuncesMark height={12} /> A Four Ounces tool
+          {/* Text in a span so the no-flex-gap fallback (> * + *) spaces it on old WebKit (Mojave). */}
+          <FourOuncesMark height={12} />
+          <span>A Four Ounces tool</span>
         </span>
       </footer>
     </div>
